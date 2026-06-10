@@ -256,6 +256,38 @@
   .save-box textarea:focus { outline: none; border-color: var(--bio-cyan); box-shadow: 0 0 0 2px rgba(47,246,255,0.15); }
   #save-msg { min-height: 18px; margin-top: 8px; font-weight: 600; }
 
+  /* ---- Objective tracker (in-run, top-left) ---- */
+  #objective { position: absolute; top: 72px; left: 14px; width: 248px; display: none;
+    background: rgba(6, 18, 26, 0.78); border: 1px solid rgba(255, 209, 102, 0.4);
+    border-radius: 11px; padding: 9px 12px; backdrop-filter: blur(4px);
+    box-shadow: 0 6px 22px rgba(0,0,0,0.4); animation: toastin 0.3s ease; }
+  #objective .obj-head { font-size: 13px; font-weight: 800; letter-spacing: 0.5px; color: var(--bio-amber); }
+  #objective .obj-sub { font-size: 11px; color: var(--ink-dim); margin: 3px 0 6px; }
+  #objective .obj-bar { height: 6px; border-radius: 4px; background: rgba(0,0,0,0.45); overflow: hidden; }
+  #objective .obj-fill { height: 100%; width: 0%; border-radius: 4px;
+    background: linear-gradient(90deg, var(--bio-amber), var(--bio-green)); box-shadow: 0 0 8px var(--bio-amber); transition: width 0.15s linear; }
+
+  /* ---- Locked / selected character cards ---- */
+  .card.locked { opacity: 0.5; cursor: not-allowed; filter: grayscale(0.6); }
+  .card.locked:hover { transform: none; box-shadow: none; border-color: rgba(74,226,255,0.25); }
+  .card.sel { border-color: var(--bio-green); box-shadow: 0 0 22px rgba(109,255,138,0.35); }
+
+  /* ---- Dev asset inspector ---- */
+  #dev-modal .panel { max-width: 1080px; width: 95vw; max-height: 92vh; overflow-y: auto; }
+  #dev-body { margin-top: 14px; }
+  .dev-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .dev-table th, .dev-table td { text-align: left; padding: 6px 9px; border-bottom: 1px solid rgba(74,226,255,0.12); vertical-align: top; }
+  .dev-table th { color: var(--bio-cyan); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; position: sticky; top: 0;
+    background: rgba(8,20,28,0.96); }
+  .dev-table tr:hover td { background: rgba(47,246,255,0.05); }
+  .dev-table .num { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--ink); }
+  .dev-sect { margin: 6px 0 14px; }
+  .dev-sect h3 { font-size: 15px; color: var(--bio-green); margin-bottom: 8px; letter-spacing: 0.5px; }
+  .dev-note { font-size: 12px; color: var(--ink-dim); line-height: 1.6; }
+  .dev-note code { color: var(--bio-amber); font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .dev-pill { display: inline-block; font-size: 10px; padding: 1px 7px; border-radius: 8px; margin: 1px 3px 1px 0;
+    border: 1px solid rgba(74,226,255,0.25); color: var(--ink-dim); }
+
   /* mobile joystick */
   #stick { position: absolute; z-index: 11; display: none; width: 120px; height: 120px;
     border-radius: 50%; border: 2px solid rgba(74,226,255,0.3); background: rgba(6,18,26,0.3); }
@@ -282,6 +314,7 @@
       <div class="hud-chip" id="kills-chip"><span class="ic">☠</span><span id="kills-val">0</span></div>
       <div class="hud-chip" id="coin-chip"><span class="ic">🪙</span><span id="coin-val">0</span></div>
     </div>
+    <div id="objective"></div>
     <div id="banner"></div>
     <div id="tray">
       <div class="tray-group">
@@ -313,6 +346,7 @@
       <button class="btn" data-act="play">▶ BEGIN INCUBATION</button>
       <button class="btn" data-act="shop">🧪 Genome Lab (Meta-Upgrades)</button>
       <button class="btn" data-act="codex">📖 Bio-Codex</button>
+      <button class="btn" data-act="dev">🔧 Asset Inspector (Dev)</button>
       <button class="btn ghost small" data-act="savedata">💾 Save · Backup &amp; Transfer</button>
     </div>
     <div class="hint">
@@ -430,6 +464,27 @@
       </div>
       <div id="save-msg" class="hint"></div>
       <div class="row" style="margin-top:14px;"><button class="btn" data-act="back-main">← Back to Menu</button></div>
+    </div>
+  </div>
+
+  <!-- ===== Character (cell line) select ===== -->
+  <div class="overlay" id="char-modal">
+    <div class="panel">
+      <div class="modal-head"><h2>SELECT YOUR CELL LINE</h2>
+        <p>Each organism opens with a different weapon and stat identity. Unlock more by hitting play milestones.</p></div>
+      <div class="cards" id="char-cards"></div>
+      <div class="row" style="margin-top:18px;"><button class="btn ghost small" data-act="back-main">← Back</button></div>
+    </div>
+  </div>
+
+  <!-- ===== Dev asset inspector ===== -->
+  <div class="overlay" id="dev-modal">
+    <div class="panel">
+      <div class="modal-head"><h2>🔧 ASSET INSPECTOR</h2>
+        <p>Live data straight from the game's definition tables — enemies, spawn windows, boss stats, weapon scaling, characters and core formulas.</p></div>
+      <div class="codex-tabs" id="dev-tabs"></div>
+      <div id="dev-body"></div>
+      <div class="row" style="margin-top:18px;"><button class="btn" data-act="back-main">← Back to Menu</button></div>
     </div>
   </div>
 </div>
@@ -726,6 +781,67 @@ const APEX = [
 const APEX_BY_BASE = Object.fromEntries(APEX.map(a => [a.base, a]));
 
 /* ======================================================================== *
+ *  SECTION 4b — PLAYABLE CELL LINES (UNLOCKABLE CHARACTERS)                  *
+ *  The first cell (Paramecium) is always available and always opens with     *
+ *  Cilia Whips. Every other line unlocks from a play milestone and brings a   *
+ *  different starting weapon + stat identity — Vampire-Survivors style.       *
+ *  `mods` are multipliers folded into createPlayer()/recomputeStats().        *
+ * ======================================================================== */
+const CHARACTERS = [
+  { id: 'paramecium', name: 'Paramecium', cell: 'Paramecium caudatum', icon: '🧫', color: '#6dff8a',
+    weapon: 'cilia', mods: {},
+    desc: 'The balanced all-rounder — slipper-shaped and sheathed in beating cilia. Opens with Cilia Whips.',
+    fact: 'Paramecia beat thousands of cilia in coordinated waves to swim and sweep bacteria into an oral groove.',
+    unlock: { always: true, hint: 'Available from the start.' } },
+  { id: 'euglena', name: 'Euglena', cell: 'Euglena viridis', icon: '🌀', color: '#ff5fa2',
+    weapon: 'flagella', mods: { speed: 1.15 }, passiveStart: { id: 'phyto', tier: 1 },
+    desc: 'A darting swimmer: +15% move speed and a head start on pickup magnetism. Opens with the Flagellar Tail Strike.',
+    fact: 'Euglena swim with a single whip-like flagellum and steer toward light using a red eyespot for photosynthesis.',
+    unlock: { stat: 'bestTime', value: 300, hint: 'Survive 5:00 in a single run.' } },
+  { id: 'bdellovibrio', name: 'Bdellovibrio', cell: 'B. bacteriovorus', icon: '🦠', color: '#b07bff',
+    weapon: 'phage', mods: { damage: 1.12, maxHp: 0.85, speed: 1.08 },
+    desc: 'A glass-cannon predator: +12% damage and faster, but a fragile membrane (−15% HP). Opens with Phage Darts.',
+    fact: 'Bdellovibrio is a bacterium that hunts other bacteria — it bores inside its prey and devours it from within.',
+    unlock: { stat: 'totalKills', value: 2000, hint: 'Defeat 2,000 microbes (lifetime).' } },
+  { id: 'phagocyte', name: 'Phagocyte', cell: 'Macrophage (allied)', icon: '⚪', color: '#7fa8b8',
+    weapon: 'vacuole', mods: { maxHp: 1.30, speed: 0.92 }, passiveStart: { id: 'cyto', tier: 1 },
+    desc: 'A living tank: +30% HP and innate armor, but a touch slower. Opens with Acidic Vacuoles.',
+    fact: 'Phagocytes are immune cells that engulf invaders and dissolve them in acidic vacuoles — exactly what this weapon mimics.',
+    unlock: { stat: 'bestLevel', value: 15, hint: 'Reach Level 15 in a single run.' } },
+  { id: 'yeast', name: 'Budding Yeast', cell: 'S. cerevisiae', icon: '🍄', color: '#ffd166',
+    weapon: 'spore', mods: { area: 1.12, pickup: 1.15 },
+    desc: 'A spreader: +12% area and a wider pickup vacuum. Opens with Spore Burst mines.',
+    fact: 'Yeasts reproduce by budding — a daughter pinches off the parent. They leaven bread and ferment every beer and wine.',
+    unlock: { stat: 'bossKills', value: 1, hint: 'Defeat the Macrophage Sentinel boss.' } },
+  { id: 'volvox', name: 'Volvox Colony', cell: 'Volvox aureus', icon: '⚭', color: '#2ff6ff',
+    weapon: 'mitosis', mods: { maxHp: 1.10, area: 1.08 }, passiveStart: { id: 'ribo', tier: 1 },
+    desc: 'A colonial swarm-keeper: sturdier, with a damage head start. Opens with Mitosis Clones.',
+    fact: 'Volvox is a hollow sphere of hundreds–thousands of cells living as one — an early experiment in multicellular life.',
+    unlock: { stat: 'bestTime', value: 600, hint: 'Survive 10:00 in a single run.' } },
+];
+const CHAR_BY_ID = Object.fromEntries(CHARACTERS.map(c => [c.id, c]));
+
+/* A cell line is playable once its milestone is met (or already recorded). */
+function charUnlocked(c) {
+  if (!c) return false;
+  if (SAVE.chars[c.id]) return true;
+  const u = c.unlock || {};
+  if (u.always) return true;
+  if (u.stat === 'bestTime')   return (SAVE.best.time || 0) >= u.value;
+  if (u.stat === 'bestLevel')  return (SAVE.best.level || 0) >= u.value;
+  if (u.stat === 'totalKills') return (SAVE.stats.totalKills || 0) >= u.value;
+  if (u.stat === 'bossKills')  return (SAVE.stats.bossKills || 0) >= u.value;
+  return false;
+}
+/* Promote any freshly-earned cell lines into the save; return the new ones. */
+function evaluateUnlocks() {
+  const newly = [];
+  for (const c of CHARACTERS) if (!SAVE.chars[c.id] && charUnlocked(c)) { SAVE.chars[c.id] = true; newly.push(c); }
+  if (newly.length) commitSave();
+  return newly;
+}
+
+/* ======================================================================== *
  *  SECTION 5 — THE BESTIARY (ENEMY SCALING ENGINE)                          *
  *  Base attributes are the t=0 values; CombatSystem applies the temporal    *
  *  scaling matrices from the GDD at spawn time.                             *
@@ -843,6 +959,9 @@ const DEFAULT_SAVE = () => ({
   flags: {},                // FLAG_* -> true
   codex: {},                // entity id -> true once encountered
   best: { time: 0, kills: 0, level: 0, endless: 0 },
+  stats: { totalKills: 0, runs: 0, bossKills: 0 },  // lifetime metrics (drive char unlocks)
+  chars: { paramecium: true },                      // unlocked cell lines
+  lastChar: 'paramecium',                           // last picked cell
   suspended: null           // snapshot of an in-progress run (for "Continue Run")
 });
 let SAVE = DEFAULT_SAVE();
@@ -855,6 +974,8 @@ function loadSave() {
       SAVE = Object.assign(DEFAULT_SAVE(), parsed);
       SAVE.upgrades = Object.assign(DEFAULT_SAVE().upgrades, parsed.upgrades || {});
       SAVE.best = Object.assign(DEFAULT_SAVE().best, parsed.best || {});
+      SAVE.stats = Object.assign(DEFAULT_SAVE().stats, parsed.stats || {});
+      SAVE.chars = Object.assign(DEFAULT_SAVE().chars, parsed.chars || {});
     }
   } catch (e) { console.warn('save load failed', e); SAVE = DEFAULT_SAVE(); }
 }
@@ -982,6 +1103,13 @@ function buildSprites() {
     g.beginPath(); g.arc(0, 0, r * 0.5, 0, TAU); g.fill();
     g.shadowBlur = 0; g.fillStyle = '#6dff8a'; g.beginPath(); g.arc(0, 0, r * 0.3, 0, TAU); g.fill();
   });
+  SPR.nutrient = makeSprite(26, (g, r) => {
+    g.shadowColor = '#9dff5f'; g.shadowBlur = 12; g.fillStyle = '#d6ffb0';
+    g.beginPath();
+    for (let i = 0; i < 6; i++) { const a = i / 6 * TAU - Math.PI / 2; const x = Math.cos(a) * r * 0.5, y = Math.sin(a) * r * 0.5; i ? g.lineTo(x, y) : g.moveTo(x, y); }
+    g.closePath(); g.fill();
+    g.shadowBlur = 0; g.fillStyle = '#4fae33'; g.beginPath(); g.arc(0, 0, r * 0.22, 0, TAU); g.fill();
+  });
   SPR.coin = makeSprite(24, (g, r) => {
     g.shadowColor = '#ffd166'; g.shadowBlur = 14; g.fillStyle = '#ffe9a8';
     g.beginPath(); g.arc(0, 0, r * 0.55, 0, TAU); g.fill();
@@ -1070,8 +1198,10 @@ const particlePool = makePool(() => ({}));
 const game = {
   mode: 'timed',          // 'timed' | 'endless'
   state: 'menu',          // menu | running | levelup | apex | paused | over
+  character: 'paramecium',// selected cell line
   time: 0,                // elapsed run time (s) — drives every scaling matrix
   dt: 0,
+  env: [], objective: null, showMinimap: true,   // environment hazards / objective / sensor map
   camera: { x: 0, y: 0 },
   shake: 0,
   flash: 0, flashColor: '#fff',
@@ -1094,11 +1224,14 @@ const game = {
 /* ---- Player factory: assembles the component bundle for the PlayerCell ---- */
 function createPlayer() {
   const hpTier = metaTier('UPG_HP'), armTier = metaTier('UPG_ARM'), spdTier = metaTier('UPG_SPD');
-  const baseMaxHp = 100 + hpTier * 10;
+  const cm = (CHAR_BY_ID[game.character] && CHAR_BY_ID[game.character].mods) || {};   // cell-line stat identity
+  const baseMaxHp = Math.round((100 + hpTier * 10) * (cm.maxHp || 1));
+  const baseSpeed = 210 * (1 + spdTier * 0.04) * (cm.speed || 1);
   const p = {
     // Transform2D + Velocity2D
     x: 0, y: 0, dx: 0, dy: 0, angle: 0, r: 16,
-    baseSpeed: 210 * (1 + spdTier * 0.04), speed: 210 * (1 + spdTier * 0.04),
+    cmods: cm,
+    baseSpeed, speed: baseSpeed,
     // Health component (incl. regenerating cell-wall shield)
     baseMaxHp, maxHp: baseMaxHp, hp: baseMaxHp,
     shieldHp: 30, maxShield: 30, shieldRegenDelay: 0, shieldRegenRate: 7, regen: 0.5,
@@ -1111,7 +1244,7 @@ function createPlayer() {
     // Derived multipliers (recomputed on any change) — fed into the pipelines
     mult: {
       ribosome: 0, cooldown: 1, area: 1, projSpeed: 1, projDur: 1,
-      pickup: 1, flatReduce: 0, ecoGain: 1, crit: 0.05, critMult: 2.0
+      pickup: 1, flatReduce: 0, ecoGain: 1, crit: 0.05, critMult: 2.0, damageMul: 1
     },
     pickupRadius: 90,
     // Transient buffs
@@ -1150,6 +1283,14 @@ function recomputeStats() {
   if (newMax !== p.maxHp) { const ratio = p.hp / p.maxHp; p.maxHp = newMax; p.hp = Math.min(p.maxHp, Math.round(p.maxHp * ratio)); }
   // Eco -> coin & XP gain (meta only).
   p.mult.ecoGain = 1 + metaTier('UPG_ECO') * 0.08;
+  // Cell-line identity mods fold in on top of organelles.
+  const cm = p.cmods || {};
+  p.mult.area     *= (cm.area || 1);
+  p.mult.pickup   *= (cm.pickup || 1);
+  p.mult.projSpeed*= (cm.projSpeed || 1);
+  p.mult.projDur  *= (cm.projDur || 1);
+  if (cm.cooldown) p.mult.cooldown *= cm.cooldown;
+  p.mult.damageMul = (cm.damage || 1);
   // Pickup radius in world units.
   p.pickupRadius = 90 * p.mult.pickup;
 }
@@ -1170,7 +1311,7 @@ const META_DAMAGE_BONUS = 1.0;
  */
 function computeDamage(base, flat = 0, forceCrit = null) {
   const p = game.player;
-  let dmg = (base + flat) * (1 + p.mult.ribosome) * META_DAMAGE_BONUS;
+  let dmg = (base + flat) * (1 + p.mult.ribosome) * META_DAMAGE_BONUS * (p.mult.damageMul || 1);
   dmg += rand(-0.05, 0.05) * dmg;                       // ±5% variance
   const crit = forceCrit == null ? chance(p.mult.crit) : forceCrit;
   if (crit) dmg *= p.mult.critMult;
@@ -1230,6 +1371,10 @@ function killEnemy(e, opts = {}) {
   const def = e.def;
   game.kills++;
   game.killsByType[e.type] = (game.killsByType[e.type] || 0) + 1;
+  // Objective hooks: count purge-zone kills; reward the Golden Plasmid.
+  const obj = game.objective;
+  if (obj && obj.type === 'purge' && dist2(e.x, e.y, obj.x, obj.y) < obj.r * obj.r) obj.count++;
+  if (e.golden) { for (let i = 0; i < 8; i++) spawnPickup('coin', e.x + rand(-30, 30), e.y + rand(-30, 30), 20); spawnRing(e.x, e.y, '#ffd166', 70, 0.5); }
   spawnParticles(e.x, e.y, def.glow, e.boss ? 60 : (e.elite ? 28 : 8), { speed: e.boss ? 320 : 160, size: e.boss ? 6 : 3, life: 0.6 });
   spawnRing(e.x, e.y, def.glow, e.r * 2.2, 0.4);
 
@@ -1340,8 +1485,8 @@ function spawnPickup(kind, x, y, value) {
   const pk = pickupPool.obtain();
   pk.kind = kind; pk.x = x; pk.y = y; pk.value = value;
   pk.dx = rand(-40, 40); pk.dy = rand(-60, -10); pk.magnet = false;
-  pk.r = kind === 'chest' ? 16 : (kind === 'coin' ? 9 : (kind === 'heal' ? 10 : 7));
-  pk.life = kind === 'chest' ? 9999 : 30; pk.born = game.time; pk.bob = rand(0, TAU);
+  pk.r = kind === 'chest' ? 16 : (kind === 'coin' ? 9 : (kind === 'heal' ? 10 : (kind === 'nutrient' ? 8 : 7)));
+  pk.life = (kind === 'chest' || kind === 'nutrient') ? 9999 : 30; pk.born = game.time; pk.bob = rand(0, TAU);
   game.pickups.push(pk);
   if (kind === 'xp') game.xpOrbsAlive++;
   return pk;
@@ -1354,6 +1499,8 @@ function createDirector() {
     spawnTimer: 0,
     eliteIdx: 0, bossDone: false,
     endlessEliteT: 90, endlessBossT: 300, endlessWave: 0,
+    objT: 90, objCount: 0,        // challenge-objective scheduler
+    envT: 0,                      // environment-hazard streaming throttle
   };
 }
 
@@ -1406,6 +1553,16 @@ function updateDirector(dt) {
     }
     dir.spawnTimer = clamp(0.55 - t * 0.00035, 0.07, 0.55);
   }
+
+  // --- challenge objectives (Spell-Brigade style) — never during a boss ---
+  if (!game.objective && (!game.boss || game.boss.dead)) {
+    dir.objT -= dt;
+    if (dir.objT <= 0 && t > 60) {
+      startObjective();
+      dir.objCount++;
+      dir.objT = clamp(150 - dir.objCount * 6, 80, 150);
+    }
+  }
 }
 
 /* The 20-minute Extinction Event: clear the field to free engine memory, then *
@@ -1430,6 +1587,7 @@ function killEnemyQuiet(e) {
 }
 
 function onBossDefeated(e) {
+  SAVE.stats.bossKills = (SAVE.stats.bossKills || 0) + 1; commitSave();   // lifetime boss kills (unlocks Yeast)
   spawnParticles(e.x, e.y, '#ffffff', 120, { speed: 420, size: 7, life: 1.0 });
   spawnRing(e.x, e.y, '#ff6a6a', 360, 0.8);
   game.shake = 30; game.flash = 0.5; game.flashColor = 'rgba(255,255,255,';
@@ -1901,6 +2059,13 @@ function updateEnemies(dt) {
           if (!e.bossClone) updateAmoeboidTendril(e, p, dt);
           break;
         }
+        case 'flee': {                                   // Golden Plasmid — evasive, jittery sprinter
+          const away = a2p + Math.PI;
+          e.phase += dt * 3;
+          vx = Math.cos(away) * e.speed + Math.cos(e.phase) * e.speed * 0.4;
+          vy = Math.sin(away) * e.speed + Math.sin(e.phase) * e.speed * 0.4;
+          break;
+        }
         case 'boss': { updateBoss(e, p, dt); vx = e._vx || 0; vy = e._vy || 0; break; }
       }
       e.x += vx * speedMul * dt; e.y += vy * speedMul * dt;
@@ -2083,6 +2248,7 @@ function collectPickup(pk) {
   if (pk.kind === 'xp') { game.xpOrbsAlive--; gainXP(pk.value); }
   else if (pk.kind === 'coin') { gainCoins(pk.value); spawnFloater(p.x, p.y - p.r - 8, '+' + pk.value + '🪙', '#ffd166'); }
   else if (pk.kind === 'heal') { const h = Math.min(p.maxHp - p.hp, pk.value); p.hp += h; spawnFloater(p.x, p.y - p.r, '+' + Math.round(h) + ' HP', '#6dff8a'); }
+  else if (pk.kind === 'nutrient') { spawnFloater(p.x, p.y - p.r - 8, '🧪 spore', '#9dff5f'); spawnParticles(pk.x, pk.y, '#9dff5f', 6, { life: 0.3 }); }
   else if (pk.kind === 'chest') { openLootChest(); }
   spawnParticles(pk.x, pk.y, '#bff8ff', 4, { life: 0.3, speed: 70 });
 }
@@ -2170,6 +2336,159 @@ function updateParticles(dt) {
 }
 
 /* ======================================================================== *
+ *  SECTION 17b — ENVIRONMENTAL HAZARDS                                       *
+ *  Static, world-anchored terrain features streamed in around the player.    *
+ *  They affect BOTH the cell and the swarm, so they're a tactical layer      *
+ *  (kite enemies through a vent!) rather than pure punishment.               *
+ * ======================================================================== */
+const ENV_TYPES = {
+  pool:    { name: 'Caustic Pool',    color: '#9dff5f', r: [70, 120] },   // slow + DoT zone
+  vent:    { name: 'Thermal Vent',    color: '#ff8a3a', r: [60, 92] },    // periodic eruption
+  current: { name: 'Riptide Current', color: '#5fc8ff', r: [92, 150] },   // directional shove
+};
+function spawnEnvHazard() {
+  const kind = pick(['pool', 'vent', 'current', 'pool', 'current']);      // pools/currents a bit commoner
+  const def = ENV_TYPES[kind];
+  const a = rand(0, TAU), dst = camHalfDiag() + rand(120, 520);
+  game.env.push({
+    kind, x: game.player.x + Math.cos(a) * dst, y: game.player.y + Math.sin(a) * dst,
+    r: rand(def.r[0], def.r[1]), color: def.color, tick: 0,
+    cycle: rand(2.2, 3.6), phase: rand(0, 3), flow: rand(0, TAU), born: game.time,
+  });
+}
+function updateEnvironment(dt) {
+  const p = game.player;
+  const cullR = camHalfDiag() + 900;
+  for (let i = game.env.length - 1; i >= 0; i--)
+    if (dist2(game.env[i].x, game.env[i].y, p.x, p.y) > cullR * cullR) game.env.splice(i, 1);
+
+  const target = 5 + Math.min(5, Math.floor(game.time / 180));
+  game.director.envT -= dt;
+  if (game.env.length < target && game.director.envT <= 0) { spawnEnvHazard(); game.director.envT = 0.6; }
+
+  const inv = p.invuln > 0 || p.invulnTrail > 0;
+  for (const h of game.env) {
+    const d = dist(h.x, h.y, p.x, p.y);
+    if (h.kind === 'pool') {
+      h.tick -= dt;
+      if (d < h.r + p.r && !inv && h.tick <= 0) { damagePlayer(7, h.x, h.y); h.tick = 0.5; }
+      const list = enemiesInRadius(h.x, h.y, h.r);
+      for (const e of list) if (!e.dead && dist2(h.x, h.y, e.x, e.y) < (h.r + e.r) * (h.r + e.r)) { e.slow = Math.max(e.slow || 0, 0.2); e.slowT = 0.3; }
+    } else if (h.kind === 'vent') {
+      h.phase += dt;
+      if (h.phase >= h.cycle) {
+        h.phase = 0;
+        spawnRing(h.x, h.y, '#ff8a3a', h.r * 1.4, 0.4);
+        spawnParticles(h.x, h.y, '#ffb066', 16, { speed: 240, life: 0.6 });
+        if (onScreen(h.x, h.y)) game.shake = Math.max(game.shake, 6);
+        if (d < h.r + p.r && !inv) damagePlayer(16, h.x, h.y);
+        const list = enemiesInRadius(h.x, h.y, h.r);
+        for (const e of list) if (!e.dead && dist2(h.x, h.y, e.x, e.y) < (h.r + e.r) * (h.r + e.r)) damageEnemy(e, 40, { silent: true });
+      }
+    } else if (h.kind === 'current') {
+      const fx = Math.cos(h.flow), fy = Math.sin(h.flow);
+      if (d < h.r) { p.x += fx * 70 * dt; p.y += fy * 70 * dt; }
+      const list = enemiesInRadius(h.x, h.y, h.r);
+      for (const e of list) if (!e.dead) { e.x += fx * 55 * dt; e.y += fy * 55 * dt; }
+    }
+  }
+}
+
+/* ======================================================================== *
+ *  SECTION 17c — IN-RUN OBJECTIVES (timed challenge events)                  *
+ *  A rotating "do a task" beat: hold a zone, purge a zone, harvest spores,    *
+ *  hunt the Golden Plasmid, or survive a surge. Success showers rewards.      *
+ * ======================================================================== */
+const OBJ_DEFS = {
+  hold:    { icon: '🎯', name: 'Stabilize the Membrane', verb: 'Stay inside the marked zone' },
+  purge:   { icon: '☣️', name: 'Sterilize the Colony',  verb: 'Destroy the microbes in the zone' },
+  collect: { icon: '🧪', name: 'Harvest Nutrients',     verb: 'Gather every nutrient spore' },
+  hunt:    { icon: '⭐', name: 'Hunt the Golden Plasmid', verb: 'Chase down the golden cell' },
+  survive: { icon: '🌊', name: 'Immune Surge',          verb: 'Survive the incoming onslaught' },
+};
+function startObjective() {
+  const type = pick(['hold', 'purge', 'collect', 'hunt', 'survive']);
+  const p = game.player, a = rand(0, TAU), dst = rand(260, 460);
+  const o = {
+    type, def: OBJ_DEFS[type], x: p.x + Math.cos(a) * dst, y: p.y + Math.sin(a) * dst,
+    r: 150, time: 0, limit: 32, state: 'active', meter: 0, need: 0, count: 0, target: null,
+  };
+  if (type === 'hold')         { o.limit = 30; o.holdNeed = 8; }
+  else if (type === 'purge')   { o.limit = 35; o.need = 12 + Math.floor(game.time / 120) * 4; }
+  else if (type === 'collect') { o.limit = 35; o.need = 6; spawnNutrients(o); }
+  else if (type === 'hunt')    { o.limit = 30; o.target = spawnGolden(o.x, o.y); }
+  else if (type === 'survive') { o.limit = 28; }
+  game.objective = o;
+  bigBanner(o.def.icon + ' OBJECTIVE — ' + o.def.name, 3);
+  toast(o.def.verb, 3);
+  game.shake = Math.max(game.shake, 6);
+}
+function spawnNutrients(o) {
+  for (let i = 0; i < o.need; i++) {
+    const a = rand(0, TAU), d = rand(40, o.r * 1.4);
+    spawnPickup('nutrient', o.x + Math.cos(a) * d, o.y + Math.sin(a) * d, 1);
+  }
+}
+function spawnGolden(x, y) {
+  const e = spawnEnemy('bacterium', x, y, {});
+  e.golden = true; e.behavior = 'flee'; e.kbImmune = false;
+  e.maxHp = e.hp = 600 * Math.pow(1 + 0.015 * game.time, 1.1);
+  e.r = 22; e.speed = 235; e.phase = rand(0, TAU);
+  return e;
+}
+function rewardObjective() {
+  const o = game.objective; if (!o) return;
+  const coins = 120 + (game.director ? game.director.objCount : 0) * 20;
+  gainCoins(coins);
+  for (let i = 0; i < 10; i++) spawnPickup('xp', o.x + rand(-40, 40), o.y + rand(-40, 40), 8);
+  spawnPickup('heal', o.x, o.y, 30);
+  if (chance(0.5)) spawnPickup('chest', o.x, o.y, 1);
+  bigBanner('✔ OBJECTIVE COMPLETE — +' + coins + '🪙', 3);
+  game.shake = Math.max(game.shake, 8); game.flash = 0.2; game.flashColor = 'rgba(120,255,160,';
+  clearObjectiveEntities(o); game.objective = null;
+}
+function failObjective() {
+  const o = game.objective; if (!o) return;
+  if (o.type === 'hunt' && o.target && !o.target.dead) killEnemyQuiet(o.target);
+  bigBanner('✗ OBJECTIVE FAILED — ' + o.def.name, 2.6);
+  clearObjectiveEntities(o); game.objective = null;
+}
+function clearObjectiveEntities(o) {
+  if (o.type === 'collect') {                                  // sweep up leftover nutrient pods
+    const arr = game.pickups;
+    for (let i = arr.length - 1; i >= 0; i--) if (arr[i].kind === 'nutrient') { arr[i] = arr[arr.length - 1]; arr.pop(); }
+  }
+}
+function updateObjective(dt) {
+  const o = game.objective; if (!o) return;
+  const p = game.player;
+  o.time += dt;
+  const left = o.limit - o.time;
+  const inZone = dist(o.x, o.y, p.x, p.y) < o.r;
+
+  if (o.type === 'hold') {
+    if (inZone) o.meter += dt; else o.meter = Math.max(0, o.meter - dt * 0.6);
+    if (o.meter >= o.holdNeed) { rewardObjective(); return; }
+  } else if (o.type === 'purge') {
+    if (o.count >= o.need) { rewardObjective(); return; }
+    if (chance(dt * 2) && enemiesInRadius(o.x, o.y, o.r).length < 18) {
+      const ty = weightedPickType(activeTypes(game.time));
+      if (ty) { const a = rand(0, TAU), d = rand(0, o.r); spawnEnemy(ty, o.x + Math.cos(a) * d, o.y + Math.sin(a) * d, {}); }
+    }
+  } else if (o.type === 'collect') {
+    let remaining = 0; for (const pk of game.pickups) if (pk.kind === 'nutrient') remaining++;
+    o.count = o.need - remaining;
+    if (remaining === 0) { rewardObjective(); return; }
+  } else if (o.type === 'hunt') {
+    if (!o.target || o.target.dead) { rewardObjective(); return; }
+  } else if (o.type === 'survive') {
+    if (left <= 0) { rewardObjective(); return; }
+    if (chance(dt * 3)) { const ty = weightedPickType(activeTypes(game.time)) || 'virus'; spawnRingEnemy(ty); }
+  }
+  if (o.type !== 'survive' && left <= 0) failObjective();
+}
+
+/* ======================================================================== *
  *  SECTION 18 — RENDERING SYSTEM (Canvas2D, bioluminescent microscope look) *
  * ======================================================================== */
 let canvas, ctx;
@@ -2218,6 +2537,8 @@ function render(time) {
 
   drawGrid(cam);
   if (game.state !== 'menu') {
+    drawEnvironment(t);
+    drawObjective(t);
     drawHazards(t);
     drawPickups(t);
     drawProjectiles();
@@ -2234,6 +2555,7 @@ function render(time) {
   drawVignette();
   if (game.flash > 0) { ctx.fillStyle = game.flashColor + Math.max(0, game.flash) + ')'; ctx.fillRect(0, 0, view.w, view.h); }
   if (game.boss && !game.boss.dead) drawBossBar();
+  if (game.state !== 'menu' && game.player) drawMinimap();
 }
 
 function drawGrid(cam) {
@@ -2296,6 +2618,14 @@ function drawEnemies(t) {
     if (e.charmed) { ctx.globalAlpha = 0.85; }
     ctx.drawImage(spr, -spr.width / 2, -spr.height / 2);
     ctx.restore();
+    // Golden Plasmid objective target — unmistakable gold aura
+    if (e.golden) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(255,209,102,0.9)'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 6 + 2 * Math.sin(t * 8), 0, TAU); ctx.stroke();
+      ctx.shadowColor = '#ffd166'; ctx.shadowBlur = 18;
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, TAU); ctx.stroke(); ctx.restore();
+    }
     // hit flash
     if (e.hitFlash > 0) { ctx.save(); ctx.globalAlpha = e.hitFlash * 4; ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, TAU); ctx.fill(); ctx.restore(); }
@@ -2340,7 +2670,7 @@ function drawPickups(t) {
   const arr = game.pickups;
   for (let i = 0; i < arr.length; i++) {
     const pk = arr[i]; if (!onScreen(pk.x, pk.y, 30)) continue;
-    const spr = pk.kind === 'coin' ? SPR.coin : pk.kind === 'heal' ? SPR.biomassBig : pk.kind === 'chest' ? SPR.chest : SPR.biomass;
+    const spr = pk.kind === 'coin' ? SPR.coin : pk.kind === 'heal' ? SPR.biomassBig : pk.kind === 'chest' ? SPR.chest : pk.kind === 'nutrient' ? SPR.nutrient : SPR.biomass;
     const bob = Math.sin(pk.bob) * 2;
     ctx.save(); ctx.translate(pk.x, pk.y + bob);
     if (pk.kind === 'chest') { const s = 1 + 0.08 * Math.sin(t * 5); ctx.scale(s, s); }
@@ -2425,6 +2755,100 @@ function drawBossBar() {
   ctx.restore();
 }
 
+/* ---- Environmental hazards (drawn under entities) ---------------------- */
+function drawEnvironment(t) {
+  for (const h of game.env) {
+    if (!onScreen(h.x, h.y, h.r + 40)) continue;
+    ctx.save();
+    if (h.kind === 'pool') {
+      const g = ctx.createRadialGradient(h.x, h.y, h.r * 0.2, h.x, h.y, h.r);
+      g.addColorStop(0, 'rgba(157,255,95,0.20)'); g.addColorStop(0.7, 'rgba(120,220,70,0.12)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 0.4; ctx.strokeStyle = 'rgba(180,255,120,0.5)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(h.x, h.y, h.r * (0.9 + 0.05 * Math.sin(t * 3)), 0, TAU); ctx.stroke();
+    } else if (h.kind === 'vent') {
+      const k = clamp(h.phase / h.cycle, 0, 1);                       // eruption charge 0..1
+      const g = ctx.createRadialGradient(h.x, h.y, 1, h.x, h.y, h.r);
+      g.addColorStop(0, `rgba(255,${Math.floor(120 + 120 * k)},60,${0.18 + 0.25 * k})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, TAU); ctx.fill();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = `rgba(255,150,60,${0.3 + 0.5 * k})`; ctx.lineWidth = 2 + 4 * k;
+      ctx.beginPath(); ctx.arc(h.x, h.y, h.r * (0.4 + 0.6 * k), 0, TAU); ctx.stroke();
+    } else if (h.kind === 'current') {
+      const g = ctx.createRadialGradient(h.x, h.y, h.r * 0.2, h.x, h.y, h.r);
+      g.addColorStop(0, 'rgba(95,200,255,0.16)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 0.5; ctx.strokeStyle = 'rgba(170,225,255,0.7)'; ctx.lineWidth = 2;
+      const fx = Math.cos(h.flow), fy = Math.sin(h.flow);
+      for (let i = 0; i < 3; i++) {
+        const off = ((t * 60 + i * 40) % 120) - 60, cx = h.x + fx * off, cy = h.y + fy * off;
+        ctx.beginPath(); ctx.moveTo(cx - fx * 10 - fy * 6, cy - fy * 10 + fx * 6);
+        ctx.lineTo(cx + fx * 10, cy + fy * 10); ctx.lineTo(cx - fx * 10 + fy * 6, cy - fy * 10 - fx * 6); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+}
+
+/* ---- Objective zone ring (hold / purge / collect) ---------------------- */
+function drawObjective(t) {
+  const o = game.objective; if (!o || o.type === 'survive' || o.type === 'hunt') return;
+  const pulse = 1 + 0.04 * Math.sin(t * 4);
+  const col = o.type === 'purge' ? '255,90,90' : o.type === 'collect' ? '157,255,95' : '47,246,255';
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = `rgba(${col},0.7)`; ctx.lineWidth = 4;
+  ctx.setLineDash([14, 10]); ctx.lineDashOffset = -t * 30;
+  ctx.beginPath(); ctx.arc(o.x, o.y, o.r * pulse, 0, TAU); ctx.stroke();
+  ctx.setLineDash([]);
+  const g = ctx.createRadialGradient(o.x, o.y, o.r * 0.3, o.x, o.y, o.r);
+  g.addColorStop(0, `rgba(${col},0.03)`); g.addColorStop(1, `rgba(${col},0.13)`);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(o.x, o.y, o.r * pulse, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+/* ---- Sensor minimap (screen space, bottom-right) ----------------------- */
+function mmRoundRect(x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function drawMinimap() {
+  if (!game.showMinimap) return;
+  const size = Math.min(168, view.w * 0.26), pad = 14;
+  const x0 = view.w - size - pad, y0 = view.h - size - pad;
+  const cx = x0 + size / 2, cy = y0 + size / 2, range = 1500, sc = (size / 2) / range, maxR = size / 2 - 6;
+  const p = game.player;
+  const toMap = (wx, wy) => { let dx = (wx - p.x) * sc, dy = (wy - p.y) * sc; const m = Math.hypot(dx, dy); if (m > maxR) { dx = dx / m * maxR; dy = dy / m * maxR; } return [cx + dx, cy + dy]; };
+  ctx.save();
+  ctx.fillStyle = 'rgba(6,18,26,0.72)'; ctx.strokeStyle = 'rgba(74,226,255,0.3)'; ctx.lineWidth = 1.5;
+  mmRoundRect(x0, y0, size, size, 10); ctx.fill(); ctx.stroke();
+  mmRoundRect(x0, y0, size, size, 10); ctx.clip();
+  // environment hazards
+  for (const h of game.env) { const m = toMap(h.x, h.y); ctx.fillStyle = h.kind === 'vent' ? 'rgba(255,138,58,0.7)' : h.kind === 'current' ? 'rgba(95,200,255,0.6)' : 'rgba(157,255,95,0.6)'; ctx.fillRect(m[0] - 2, m[1] - 2, 4, 4); }
+  // objective
+  const o = game.objective;
+  if (o) {
+    const m = toMap(o.x, o.y); ctx.strokeStyle = 'rgba(255,209,102,0.95)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(m[0], m[1], 6, 0, TAU); ctx.stroke();
+    if (o.type === 'hunt' && o.target && !o.target.dead) { const g = toMap(o.target.x, o.target.y); ctx.fillStyle = '#ffd166'; ctx.beginPath(); ctx.arc(g[0], g[1], 3, 0, TAU); ctx.fill(); }
+  }
+  // enemies (sampled so huge swarms stay cheap)
+  const es = game.enemies, step = es.length > 240 ? Math.ceil(es.length / 240) : 1;
+  for (let i = 0; i < es.length; i += step) {
+    const e = es[i]; if (e.dead) continue; const m = toMap(e.x, e.y);
+    if (e.boss) { ctx.fillStyle = '#ff3a3a'; ctx.fillRect(m[0] - 3, m[1] - 3, 6, 6); }
+    else if (e.elite) { ctx.fillStyle = '#c98bff'; ctx.fillRect(m[0] - 2.5, m[1] - 2.5, 5, 5); }
+    else { ctx.fillStyle = e.golden ? '#ffd166' : ((e.def && e.def.glow) || '#7dff9a'); ctx.fillRect(m[0] - 1, m[1] - 1, 2, 2); }
+  }
+  // loot chests
+  for (const pk of game.pickups) if (pk.kind === 'chest') { const m = toMap(pk.x, pk.y); ctx.fillStyle = '#ffd166'; ctx.fillRect(m[0] - 2, m[1] - 2, 4, 4); }
+  // player at centre
+  ctx.fillStyle = '#2ff6ff'; ctx.shadowColor = '#2ff6ff'; ctx.shadowBlur = 8;
+  ctx.beginPath(); ctx.arc(cx, cy, 3.5, 0, TAU); ctx.fill(); ctx.shadowBlur = 0;
+  ctx.restore();
+  ctx.save(); ctx.fillStyle = 'rgba(127,168,184,0.85)'; ctx.font = '9px Segoe UI, sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText('SENSOR MAP · M', x0 + 8, y0 + 13); ctx.restore();
+}
+
 /* ======================================================================== *
  *  SECTION 19 — INPUT SYSTEM (keyboard, mouse-hold, touch joystick)          *
  * ======================================================================== */
@@ -2437,6 +2861,7 @@ function setupInput() {
     const k = e.key.toLowerCase();
     if (keymap[k]) { input[keymap[k]] = true; e.preventDefault(); }
     if (k === 'escape') togglePause();
+    if (k === 'm') game.showMinimap = !game.showMinimap;
     if (k === 'r' && game.state === 'levelup') doReroll();
     if (game.state === 'levelup' && k >= '1' && k <= '4') { const idx = +k - 1; const cards = document.querySelectorAll('#levelup-cards .card'); if (cards[idx]) cards[idx].click(); }
   });
@@ -2500,6 +2925,24 @@ function updateHUD() {
   $('hp-fill').style.width = hpPct + '%';
   $('shield-fill').style.width = clamp(p.shieldHp / p.maxHp, 0, 1) * 100 + '%';
   $('hp-text').textContent = Math.ceil(p.hp) + ' / ' + p.maxHp + (p.shieldHp > 0 ? '  ⛨' + Math.ceil(p.shieldHp) : '');
+}
+
+/* Objective tracker panel — only visible while a challenge is active. */
+function updateObjectiveHUD() {
+  const el = $('objective'); if (!el) return;
+  const o = game.objective;
+  if (!o) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  const left = Math.max(0, Math.ceil(o.limit - o.time));
+  let prog = '', frac = 0;
+  if (o.type === 'hold')         { prog = `Held ${o.meter.toFixed(1)} / ${o.holdNeed}s`; frac = o.meter / o.holdNeed; }
+  else if (o.type === 'purge')   { prog = `Purged ${o.count} / ${o.need}`; frac = o.count / o.need; }
+  else if (o.type === 'collect') { prog = `Spores ${o.count} / ${o.need}`; frac = o.count / o.need; }
+  else if (o.type === 'hunt')    { prog = (o.target && !o.target.dead) ? 'Target on the run…' : 'Down!'; frac = 0; }
+  else if (o.type === 'survive') { prog = 'Hold the line!'; frac = o.time / o.limit; }
+  el.innerHTML = `<div class="obj-head">${o.def.icon} ${o.def.name}</div>
+    <div class="obj-sub">${prog} · ⏱ ${left}s</div>
+    <div class="obj-bar"><div class="obj-fill" style="width:${clamp(frac * 100, 0, 100)}%"></div></div>`;
 }
 
 function refreshTray() {
@@ -2652,24 +3095,28 @@ function startRun(mode) {
   game.mode = mode; game.state = 'running'; game.time = 0;
   game.enemies = []; game.projectiles = []; game.pickups = []; game.hazards = [];
   game.particles = []; game.floaters = []; game.clones = []; game.effects = [];
+  game.env = []; game.objective = null; game._finalized = false;
   game.kills = 0; game.killsByType = {}; game.coinsThisRun = 0; game.xpOrbsAlive = 0;
   game.pendingLevelUps = 0; game.apexOffered = {}; game.boss = null; game.bossSpawned = false;
   game.win = false; game.questsCompletedThisRun = [];
   game.quest = { cloneStreak: 0, shieldBroke: false };
   game.rerolls = metaTier('UPG_RER');
+  // Resolve the chosen cell line (fall back to the always-unlocked Paramecium).
+  if (!CHAR_BY_ID[game.character] || !charUnlocked(CHAR_BY_ID[game.character])) game.character = 'paramecium';
+  SAVE.lastChar = game.character; commitSave();
+  const ch = CHAR_BY_ID[game.character];
   game.player = createPlayer();
-  // start with one random offensive weapon so auto-fire engages immediately
-  // (Mitosis/Spore are excluded as starters — they shine as secondaries).
-  const starter = WEAPON_BY_ID[pick(['cilia', 'phage', 'vacuole', 'flagella'])];
-  game.player.weapons.push({ id: starter.id, level: 1, timer: 0, apex: false, apexId: null });
-  markCodex(starter.id);
+  // The cell line dictates the opening weapon (and any starting organelle).
+  game.player.weapons.push({ id: ch.weapon, level: 1, timer: 0, apex: false, apexId: null });
+  markCodex(ch.weapon);
+  if (ch.passiveStart) { game.player.passives[ch.passiveStart.id] = ch.passiveStart.tier; markCodex(ch.passiveStart.id); }
   recomputeStats();
   game.camera.x = game.player.x; game.camera.y = game.player.y;
   game.director = createDirector();
   refreshTray();
   hideAllOverlays(); $('banner').innerHTML = ''; setHud(true);
   bigBanner(mode === 'timed' ? 'INCUBATION BEGINS — SURVIVE 20:00' : 'ENDLESS INCUBATION — HOW LONG CAN YOU LAST?', 2.6);
-  toast('Starter weapon: ' + starter.name, 2.4);
+  toast(ch.icon + ' ' + ch.name + ' · opens with ' + WEAPON_BY_ID[ch.weapon].name, 2.6);
 }
 function resumeRun() { if (game.player && game.player.hp > 0) { game.state = 'running'; hideOverlay('pause-modal'); } }
 function togglePause() {
@@ -2687,13 +3134,18 @@ function togglePause() {
 function statRows(rows) { return rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join(''); }
 
 function finalizeRun() {
+  if (game._finalized) return;      // bank a run's results exactly once
+  game._finalized = true;
   SAVE.coins += game.coinsThisRun;
   SAVE.best.time = Math.max(SAVE.best.time, game.time);
   SAVE.best.kills = Math.max(SAVE.best.kills, game.kills);
   SAVE.best.level = Math.max(SAVE.best.level, game.player.level);
   if (game.mode === 'endless') SAVE.best.endless = Math.max(SAVE.best.endless, game.time);
+  SAVE.stats.totalKills += game.kills;
+  SAVE.stats.runs += 1;
   SAVE.suspended = null;            // a finished run is no longer resumable
   commitSave();
+  game._newlyUnlocked = evaluateUnlocks();   // surfaced on the game-over screen
 }
 function endRun(win) {
   if (game.state === 'over') return;
@@ -2707,9 +3159,10 @@ function endRun(win) {
     ['Best Time', fmtTime(SAVE.best.time)], ['Best Kills', SAVE.best.kills.toLocaleString()],
   ]);
   $('go-coins').textContent = '🪙 +' + game.coinsThisRun.toLocaleString() + ' Genetic Code  ·  Bank: ' + SAVE.coins.toLocaleString();
-  $('go-quests').innerHTML = game.questsCompletedThisRun.length
-    ? '✔ Quests completed: ' + game.questsCompletedThisRun.map(q => q.name).join(', ')
-    : '';
+  const lines = [];
+  if (game.questsCompletedThisRun.length) lines.push('✔ Quests: ' + game.questsCompletedThisRun.map(q => q.name).join(', '));
+  if (game._newlyUnlocked && game._newlyUnlocked.length) lines.push('🧬 New cell line unlocked: ' + game._newlyUnlocked.map(c => c.icon + ' ' + c.name).join(', '));
+  $('go-quests').innerHTML = lines.join('<br/>');
   setHud(false); showOverlay('gameover-modal');
 }
 function quitRun() { finalizeRun(); game.state = 'menu'; setHud(false); backToMenu(); }
@@ -2730,7 +3183,7 @@ function serializeRun() {
   const p = game.player; if (!p) return null;
   const d = game.director || {};
   return {
-    v: 2, mode: game.mode, time: game.time,
+    v: 2, mode: game.mode, character: game.character, time: game.time,
     kills: game.kills, killsByType: Object.assign({}, game.killsByType),
     coinsThisRun: game.coinsThisRun, pendingLevelUps: game.pendingLevelUps, rerolls: game.rerolls,
     apexOffered: Object.assign({}, game.apexOffered),
@@ -2765,8 +3218,10 @@ function resumeSavedRun() {
   if (!snap || !snap.player) { backToMenu(); return; }
   RNG = makeRNG((Math.random() * 1e9) | 0);
   game.mode = snap.mode; game.state = 'running'; game.time = snap.time || 0;
+  game.character = snap.character && CHAR_BY_ID[snap.character] ? snap.character : (SAVE.lastChar || 'paramecium');
   game.enemies = []; game.projectiles = []; game.pickups = []; game.hazards = [];
   game.particles = []; game.floaters = []; game.clones = []; game.effects = [];
+  game.env = []; game.objective = null; game._finalized = false;
   game.kills = snap.kills || 0; game.killsByType = Object.assign({}, snap.killsByType || {});
   game.coinsThisRun = snap.coinsThisRun || 0; game.xpOrbsAlive = 0;
   game.pendingLevelUps = snap.pendingLevelUps || 0; game.apexOffered = Object.assign({}, snap.apexOffered || {});
@@ -2900,6 +3355,123 @@ function buildCodex() {
   else for (const c of CONCEPTS) add(c.icon, c.name, c.meta, c.fact, '', true);
 }
 
+/* ---- Character (cell line) select ---- */
+function openCharSelect() {
+  evaluateUnlocks();
+  hideAllOverlays();
+  const wrap = $('char-cards'); wrap.innerHTML = '';
+  CHARACTERS.forEach((c, i) => {
+    const unlocked = charUnlocked(c), w = WEAPON_BY_ID[c.weapon], m = c.mods || {};
+    const card = document.createElement('div');
+    card.className = 'card weapon' + (unlocked ? '' : ' locked') + (game.character === c.id ? ' sel' : '');
+    card.style.animationDelay = (i * 0.04) + 's';
+    const bits = [];
+    if (m.maxHp) bits.push((m.maxHp >= 1 ? '+' : '') + Math.round((m.maxHp - 1) * 100) + '% HP');
+    if (m.speed) bits.push((m.speed >= 1 ? '+' : '') + Math.round((m.speed - 1) * 100) + '% Speed');
+    if (m.damage) bits.push('+' + Math.round((m.damage - 1) * 100) + '% DMG');
+    if (m.area) bits.push('+' + Math.round((m.area - 1) * 100) + '% Area');
+    if (m.pickup) bits.push('+' + Math.round((m.pickup - 1) * 100) + '% Pickup');
+    if (c.passiveStart) bits.push('starts: ' + PASSIVE_BY_ID[c.passiveStart.id].name);
+    card.innerHTML = `<div class="corner">${i + 1}</div>
+      <div class="ic-big" style="color:${c.color}">${unlocked ? c.icon : '🔒'}</div>
+      <div class="ctype">${unlocked ? c.cell : 'Locked cell line'}</div>
+      <div class="cname">${unlocked ? c.name : '???'}</div>
+      <div class="clevel">${unlocked ? (w.icon + ' ' + w.name) : ''}</div>
+      <div class="cdesc">${unlocked ? c.desc : '🔒 ' + c.unlock.hint}</div>
+      ${unlocked && bits.length ? '<div style="margin-top:6px">' + bits.map(b => `<span class="dev-pill">${b}</span>`).join('') + '</div>' : ''}
+      <div class="cfact">🔬 ${unlocked ? c.fact : 'Keep playing to splice this genome.'}</div>`;
+    if (unlocked) card.onclick = () => { game.character = c.id; SAVE.lastChar = c.id; commitSave(); openModeSelect(); };
+    wrap.appendChild(card);
+  });
+  showOverlay('char-modal');
+}
+
+/* ---- Dev asset inspector ---- */
+const DEV_TABS = [
+  { id: 'enemies', label: '🦠 Enemies' }, { id: 'bosses', label: '👑 Elites & Bosses' },
+  { id: 'weapons', label: '🧬 Weapons' }, { id: 'passives', label: '🔬 Organelles' },
+  { id: 'apex', label: '⚛ Apex' }, { id: 'chars', label: '🧫 Cells' },
+  { id: 'objectives', label: '🎯 Objectives' }, { id: 'env', label: '🌋 Hazards' },
+  { id: 'formulas', label: '📐 Formulas' },
+];
+let devTab = 'enemies';
+function openDev() { hideAllOverlays(); buildDevTabs(); buildDev(); showOverlay('dev-modal'); }
+function buildDevTabs() {
+  const wrap = $('dev-tabs'); wrap.innerHTML = '';
+  for (const t of DEV_TABS) { const el = document.createElement('div'); el.className = 'codex-tab' + (t.id === devTab ? ' active' : '');
+    el.textContent = t.label; el.onclick = () => { devTab = t.id; buildDevTabs(); buildDev(); }; wrap.appendChild(el); }
+}
+function devWindow(d) {
+  if (d.spawnAt) return 'at ' + d.spawnAt.map(fmtTime).join(' & ');
+  if (d.window && d.window[0] >= 0) return fmtTime(d.window[0]) + ' – ' + fmtTime(d.window[1]);
+  return '—';
+}
+function devScale(d, t) {
+  return { hp: Math.round(d.hp * Math.pow(1 + 0.015 * t, 1.1)), dmg: Math.round(d.damage * (1 + 0.008 * t)), spd: Math.round(Math.min(d.speed * (1 + 0.002 * t), d.speed * 1.5)) };
+}
+function buildDev() {
+  const body = $('dev-body'); let h = '';
+  if (devTab === 'enemies' || devTab === 'bosses') {
+    const ids = Object.keys(ENEMIES).filter(id => { const e = ENEMIES[id], boss = e.boss || e.elite; return devTab === 'bosses' ? boss : !boss; });
+    h += `<table class="dev-table"><tr><th>Cell</th><th>Weight</th><th>Spawn window</th><th>HP base→@10m</th><th>DMG→@10m</th><th>Speed→@10m</th><th>Radius</th><th>XP</th><th>Behaviour</th><th>Special</th></tr>`;
+    for (const id of ids) { const e = ENEMIES[id], s = devScale(e, 600);
+      h += `<tr><td>${e.icon} <b>${e.name}</b></td><td class="num">${e.weight}</td><td class="num">${devWindow(e)}</td>
+        <td class="num">${e.hp} → ${s.hp}</td><td class="num">${e.damage} → ${s.dmg}</td><td class="num">${e.speed} → ${s.spd}</td>
+        <td class="num">${e.radius}px</td><td class="num">${e.xp}</td><td>${e.behavior}</td><td class="dev-note">${e.special || ''}</td></tr>`; }
+    h += `</table>`;
+    if (devTab === 'bosses') h += `<p class="dev-note" style="margin-top:10px">The <b>Macrophage Sentinel</b> runs a 3-phase script: <code>100–75%</code> spiral bullet-hell → <code>74–35%</code> invulnerable cocoon spawning 2 division-clones (20% HP each) → <code>34–0%</code> phagocytic frenzy (+100% speed, gravity vortex). Its weight of 500 wipes the field on spawn to free the engine.</p>`;
+    else h += `<p class="dev-note" style="margin-top:10px">Director weight cap <code>500</code>. Spawn cadence <code>clamp(0.55 − t·0.00035, 0.07, 0.55)s</code>, burst <code>1 + floor(t/240)</code> per tick. Scaled column shown @ <code>t = 10:00</code>.</p>`;
+  } else if (devTab === 'weapons') {
+    for (const w of WEAPONS) {
+      h += `<div class="dev-sect"><h3>${w.icon} ${w.name} <span class="dev-pill">apex → ${APEX_BY_BASE[w.id].name}</span></h3>
+        <table class="dev-table"><tr><th>Lv</th><th>Upgrade</th><th>Computed stats</th></tr>`;
+      for (let L = 1; L <= w.maxLevel; L++) { const s = w.getStats(L);
+        const keys = Object.keys(s).filter(k => typeof s[k] === 'number').map(k => `${k}:${Math.round(s[k] * 100) / 100}`).join('  ');
+        h += `<tr><td class="num">${L}</td><td>${w.levelText[L - 1]}</td><td class="dev-note num">${keys}</td></tr>`; }
+      h += `</table></div>`;
+    }
+  } else if (devTab === 'passives') {
+    h += `<table class="dev-table"><tr><th>Organelle</th><th>Modulates</th><th>Tier values</th></tr>`;
+    for (const p of PASSIVES) h += `<tr><td>${p.icon} <b>${p.name}</b></td><td>${p.target}</td><td class="num">${p.values.map((v, i) => 'T' + (i + 1) + ':' + v).join('   ')}</td></tr>`;
+    h += `</table>`;
+  } else if (devTab === 'apex') {
+    h += `<table class="dev-table"><tr><th>Apex Mutation</th><th>Recipe</th><th>Effect</th></tr>`;
+    for (const a of APEX) h += `<tr><td>${a.icon} <b>${a.name}</b></td><td>${WEAPON_BY_ID[a.base].name} (Lv8) + ${PASSIVE_BY_ID[a.passive].name} (≥1)</td><td class="dev-note">${a.desc}</td></tr>`;
+    h += `</table>`;
+  } else if (devTab === 'chars') {
+    h += `<table class="dev-table"><tr><th>Cell line</th><th>Starter weapon</th><th>Stat mods</th><th>Unlock</th><th>Status</th></tr>`;
+    for (const c of CHARACTERS) { const m = c.mods || {}, mods = Object.keys(m).map(k => k + ' ×' + m[k]).join(', ') + (c.passiveStart ? ' + ' + PASSIVE_BY_ID[c.passiveStart.id].name : '');
+      h += `<tr><td>${c.icon} <b>${c.name}</b></td><td>${WEAPON_BY_ID[c.weapon].name}</td><td class="dev-note">${mods || '—'}</td><td class="dev-note">${c.unlock.hint}</td><td>${charUnlocked(c) ? '<span style="color:var(--bio-green)">✓ unlocked</span>' : '🔒 locked'}</td></tr>`; }
+    h += `</table>`;
+  } else if (devTab === 'objectives') {
+    const rows = [['🎯 Stabilize the Membrane', 'Stay in the zone for 8 cumulative seconds', '30s'],
+      ['☣️ Sterilize the Colony', 'Destroy 12+ microbes inside the ring (scales with time)', '35s'],
+      ['🧪 Harvest Nutrients', 'Collect all 6 nutrient spores on the map', '35s'],
+      ['⭐ Hunt the Golden Plasmid', 'Catch & destroy the fleeing golden cell', '30s'],
+      ['🌊 Immune Surge', 'Survive a 28-second onslaught', '28s']];
+    h += `<table class="dev-table"><tr><th>Objective</th><th>Goal</th><th>Timer</th></tr>`;
+    for (const r of rows) h += `<tr><td><b>${r[0]}</b></td><td class="dev-note">${r[1]}</td><td class="num">${r[2]}</td></tr>`;
+    h += `</table><p class="dev-note" style="margin-top:10px">First objective ≈ <code>1:30</code>, then every <code>clamp(150 − count·6, 80, 150)s</code>. Reward: <code>120 + count·20</code> coins + 10 XP orbs + a heal + 50% loot chest. Suppressed during boss fights.</p>`;
+  } else if (devTab === 'env') {
+    h += `<table class="dev-table"><tr><th>Hazard</th><th>Effect on the cell</th><th>Effect on the swarm</th></tr>
+      <tr><td>🟢 <b>Caustic Pool</b></td><td class="dev-note">7 damage every 0.5s while inside</td><td class="dev-note">slows enemies 20%</td></tr>
+      <tr><td>🟠 <b>Thermal Vent</b></td><td class="dev-note">16 burst damage on eruption (cycle 2.2–3.6s)</td><td class="dev-note">40 damage to enemies in the blast</td></tr>
+      <tr><td>🔵 <b>Riptide Current</b></td><td class="dev-note">shoves you 70px/s along the flow</td><td class="dev-note">shoves enemies 55px/s — kite them!</td></tr></table>
+      <p class="dev-note" style="margin-top:10px">Hazards stream in around the player (target density <code>5 + min(5, floor(t/180))</code>) and are culled once far off-screen. They show on the sensor map.</p>`;
+  } else {
+    h += `<div class="dev-sect"><h3>Core formulas</h3><table class="dev-table"><tr><th>System</th><th>Formula</th></tr>
+      <tr><td>XP to next level</td><td class="num">round(10·N^1.6 + 25)</td></tr>
+      <tr><td>Damage pipeline</td><td class="num">((Base+Flat)·(1+Ribosome)·CharDmg) ±5%, ×CritMult on crit</td></tr>
+      <tr><td>Enemy HP @ t</td><td class="num">Base·(1 + 0.015·t)^1.1</td></tr>
+      <tr><td>Enemy DMG @ t</td><td class="num">Base·(1 + 0.008·t)</td></tr>
+      <tr><td>Enemy Speed @ t</td><td class="num">min(Base·(1+0.002·t), Base·1.5)</td></tr></table></div>
+      <div class="dev-sect"><h3>Meta-upgrade costs</h3><table class="dev-table"><tr><th>Upgrade</th><th>Cost / tier</th><th>Max</th></tr>`;
+    for (const u of META_UPGRADES) h += `<tr><td>${u.icon} ${u.name}</td><td class="num">${u.id === 'UPG_HP' ? '250·t²' : u.id === 'UPG_ARM' ? '500·t^2.5' : u.id === 'UPG_SPD' ? '150·t^1.8' : u.id === 'UPG_ECO' ? '300·t²' : '2000·t³'}</td><td class="num">${u.max}</td></tr>`;
+    h += `</table></div>`;
+  }
+  body.innerHTML = h;
+}
+
 function resetSave() {
   if (!confirm('Erase ALL progress — Genetic Code, meta-upgrades, quests, codex unlocks AND any suspended run? This cannot be undone.')) return;
   SAVE = DEFAULT_SAVE(); commitSave(); toast('Save data reset.');
@@ -2955,7 +3527,7 @@ document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-act]'); if (!btn) return;
   const act = btn.getAttribute('data-act');
   ({
-    play: openModeSelect, shop: openShop, codex: openCodex, reset: resetSave,
+    play: openCharSelect, shop: openShop, codex: openCodex, reset: resetSave, dev: openDev,
     continue: resumeSavedRun, savedata: openSaveModal, savequit: saveAndExit,
     'back-main': backToMenu, resume: () => resumeRun(), quit: quitRun,
     retry: () => startRun(game.mode), 'to-shop': openShop, 'to-menu': backToMenu,
@@ -2986,6 +3558,8 @@ function stepGame(dt) {
   game.time += dt;
   buildQuadtree();
   updateDirector(dt);
+  updateEnvironment(dt);
+  updateObjective(dt);
   updateWeapons(dt);
   updateClones(dt);
   updateProjectiles(dt);
@@ -3008,7 +3582,7 @@ function frame(now) {
   game.dt = dt;
   if (game.state === 'running') stepGame(dt);
   render(now);
-  if (game.state !== 'menu' && game.player) updateHUD();
+  if (game.state !== 'menu' && game.player) { updateHUD(); updateObjectiveHUD(); }
   requestAnimationFrame(frame);
 }
 

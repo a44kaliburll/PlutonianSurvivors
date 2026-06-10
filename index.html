@@ -135,6 +135,10 @@
   .slot.empty { opacity: 0.28; }
   .slot.apex { border-color: var(--bio-amber);
     box-shadow: 0 0 16px rgba(255, 209, 102, 0.5), inset 0 0 12px rgba(255,209,102,0.15); }
+  .slot.mini { width: 30px; height: 30px; font-size: 15px; border-style: dashed; opacity: 0.92; }
+  .slot.mini .lvl { font-size: 8px; bottom: -4px; }
+  .slot.mini.mut { border-color: var(--bio-green); border-style: solid;
+    box-shadow: 0 0 10px rgba(109,255,138,0.4), inset 0 0 8px rgba(109,255,138,0.12); }
   .slot .lvl { position: absolute; right: -3px; bottom: -5px; font-size: 10px;
     font-weight: 800; background: #04121a; border: 1px solid var(--panel-edge);
     border-radius: 6px; padding: 0px 4px; color: var(--bio-cyan); }
@@ -388,6 +392,17 @@
       </div>
       <div class="cards" id="apex-cards"></div>
       <div class="row"><button class="btn ghost small" id="apex-skip">Skip — keep current arsenal</button></div>
+    </div>
+  </div>
+
+  <!-- ===== Mutation reward (objective completion) ===== -->
+  <div class="overlay" id="mutation-modal">
+    <div class="panel">
+      <div class="modal-head">
+        <h2 style="background:linear-gradient(90deg,var(--bio-green),var(--bio-cyan));-webkit-background-clip:text;background-clip:text;color:transparent;">🧬 MUTATION TRIGGERED</h2>
+        <p>Objective complete — splice a permanent mutation into your genome. They stack toward the ultimate bioevolution.</p>
+      </div>
+      <div class="cards" id="mutation-cards"></div>
     </div>
   </div>
 
@@ -757,6 +772,67 @@ const PASSIVES = [
     tierText: t => `+${(t * 20)}% pickup radius` }
 ];
 const PASSIVE_BY_ID = Object.fromEntries(PASSIVES.map(p => [p.id, p]));
+
+/* ======================================================================== *
+ *  SECTION 3b — SECONDARY PASSIVES ("ADAPTATIONS")                           *
+ *  Minor, freely-stacking traits that appear in the level-up pool alongside  *
+ *  the six organelles. They do NOT consume an organelle slot or feed an Apex  *
+ *  pairing — they're the survivors-style "passive items" that round a build   *
+ *  out (regen, more HP, faster attacks, raw damage, speed, crit).            *
+ * ======================================================================== */
+const ADAPTATIONS = [
+  { id: 'regen', name: 'Contractile Vacuole', icon: '♻️', color: '#6dff8a', max: 5, type: 'adapt',
+    desc: 'Continuously regenerate health.', tierText: t => '+' + (t * 0.6).toFixed(1) + ' HP / second',
+    fact: 'A contractile vacuole bails excess water out of a freshwater cell that would otherwise swell and burst.' },
+  { id: 'vitality', name: 'Reinforced Wall', icon: '🧱', color: '#ff5fa2', max: 5, type: 'adapt',
+    desc: 'Increase maximum health.', tierText: t => '+' + (t * 8) + '% max HP',
+    fact: 'A rigid cell wall of peptidoglycan or cellulose resists the internal turgor pressure pushing the membrane outward.' },
+  { id: 'reflex', name: 'Hyperkinesis', icon: '⚡', color: '#ffd166', max: 5, type: 'adapt',
+    desc: 'Fire all weapons faster.', tierText: t => '−' + (t * 6) + '% weapon cooldown',
+    fact: 'Enzymes can speed a reaction a billion-fold — catalysis is biochemistry\'s overclock button.' },
+  { id: 'motility', name: 'Myosin Drive', icon: '🏃', color: '#5fc8ff', max: 5, type: 'adapt',
+    desc: 'Move faster.', tierText: t => '+' + (t * 6) + '% movement speed',
+    fact: 'Myosin motor proteins "walk" hand-over-hand along actin filaments to haul cargo and contract muscle.' },
+  { id: 'potency', name: 'Toxin Concentrate', icon: '☣️', color: '#9dff5f', max: 5, type: 'adapt',
+    desc: 'Deal more damage.', tierText: t => '+' + (t * 7) + '% damage',
+    fact: 'Botulinum, the most acutely toxic substance known, blocks the nerve signals that tell muscles to contract.' },
+  { id: 'lethality', name: 'Nucleases', icon: '🎯', color: '#b07bff', max: 5, type: 'adapt',
+    desc: 'Raise critical chance and critical damage.', tierText: t => '+' + (t * 3) + '% crit · +' + (t * 15) + '% crit dmg',
+    fact: 'Nucleases are molecular scissors that cut nucleic acids — CRISPR\'s Cas9 is a programmable one used to edit genes.' },
+];
+const ADAPT_BY_ID = Object.fromEntries(ADAPTATIONS.map(a => [a.id, a]));
+
+/* ======================================================================== *
+ *  SECTION 3c — RUN MUTATIONS (objective rewards, stackable, build-defining) *
+ *  Completing an in-run objective grants a choice of MUTATION. They stack    *
+ *  toward an over-the-top "ultimate" build: extra projectiles, counter-       *
+ *  rotating melee zones, projectiles that split on hit or at end of flight.   *
+ * ======================================================================== */
+const MUTATIONS = [
+  { id: 'multishot', name: 'Polymerase Burst', icon: '➕', color: '#b07bff', max: 6,
+    desc: '+1 projectile for Phage Darts, Acidic Vacuoles and Spore Burst.',
+    fact: 'DNA polymerase copies all ~3 billion bases of your genome with roughly one error per billion — relentless mass production.' },
+  { id: 'mirror', name: 'Bilateral Symmetry', icon: '🔄', color: '#6dff8a', max: 4,
+    desc: 'Cilia & Flagellar strikes spawn a second, counter-rotating damage zone cast at the same instant.',
+    fact: 'Mirror-image (bilateral) body plans gave animals a definite front and back — and a direction to swim toward prey.' },
+  { id: 'splitHit', name: 'Schizogony', icon: '💥', color: '#ffd166', max: 4,
+    desc: 'Projectiles burst into shrapnel fragments when they strike an enemy.',
+    fact: 'In schizogony the malaria parasite copies itself many times inside one blood cell, then ruptures it all at once.' },
+  { id: 'splitEnd', name: 'Terminal Fission', icon: '✳️', color: '#5fc8ff', max: 4,
+    desc: 'Projectiles split into fragments when they reach the end of their flight.',
+    fact: 'Binary fission: one bacterium splits cleanly into two identical daughters, sometimes every twenty minutes.' },
+  { id: 'power', name: 'Hypermutation', icon: '☢️', color: '#ff5a5a', max: 6,
+    desc: '+20% to all damage dealt.',
+    fact: 'Immune B-cells deliberately hypermutate their antibody genes, evolving a tighter grip on a pathogen within days.' },
+  { id: 'haste', name: 'Metabolic Overdrive', icon: '⏩', color: '#ffd166', max: 6,
+    desc: '−12% weapon cooldown (multiplicative).',
+    fact: 'A shrew\'s heart can beat ~1000 times a minute; its furnace metabolism forces it to eat nearly every hour to survive.' },
+  { id: 'giant', name: 'Macromolecular Bloom', icon: '🔬', color: '#2ff6ff', max: 5,
+    desc: '+20% weapon area, range and projectile size.',
+    fact: 'The biggest cell you can see unaided is an ostrich-egg yolk — a single cell several centimetres across.' },
+];
+const MUT_BY_ID = Object.fromEntries(MUTATIONS.map(m => [m.id, m]));
+function mut(id) { return (game.mutations && game.mutations[id]) || 0; }
 
 /* ======================================================================== *
  *  SECTION 4 — APEX MUTATION MATRIX (EVOLUTION SYNERGIES)                    *
@@ -1250,6 +1326,7 @@ const game = {
   dt: 0,
   env: [], objective: null, showMinimap: true,   // environment hazards / objective / sensor map
   pads: [], boosts: null, boostLog: [],          // micro-boost channel pads + run-permanent gains
+  mutations: {},                                 // objective-reward mutations (id -> stack count)
   camera: { x: 0, y: 0 },
   shake: 0,
   flash: 0, flashColor: '#fff',
@@ -1288,7 +1365,8 @@ function createPlayer() {
     level: 1, xp: 0, xpNext: xpForLevel(1),
     // Registries
     weapons: [],                 // [{id, level, timer, apex, apexId}]
-    passives: {},                // id -> tier
+    passives: {},                // id -> tier (the six organelles)
+    adaptations: {},             // id -> tier (secondary stat passives)
     // Derived multipliers (recomputed on any change) — fed into the pipelines
     mult: {
       ribosome: 0, cooldown: 1, area: 1, projSpeed: 1, projDur: 1,
@@ -1311,6 +1389,7 @@ function xpForLevel(N) { return Math.round(10 * Math.pow(N, 1.6) + 25); }
 function recomputeStats() {
   const p = game.player, pv = p.passives;
   const tier = id => pv[id] || 0;
+  const adapt = id => (p.adaptations && p.adaptations[id]) || 0;   // secondary passives
   const bo = game.boosts || defaultBoosts();     // run-permanent micro-boost gains
 
   // Ribosomes -> additive damage multiplier term used by the damage pipeline.
@@ -1328,7 +1407,7 @@ function recomputeStats() {
   const cytoT = tier('cyto');
   p.mult.flatReduce = (cytoT ? PASSIVE_BY_ID.cyto.values[cytoT - 1] : 0) + p.armor;
   const hpBonus = cytoT ? PASSIVE_BY_ID.cyto.hpBonus[cytoT - 1] : 0;
-  const newMax = Math.round(p.baseMaxHp * (1 + hpBonus) * bo.hpMul);
+  const newMax = Math.round(p.baseMaxHp * (1 + hpBonus) * bo.hpMul * (1 + adapt('vitality') * 0.08));
   if (newMax !== p.maxHp) { const ratio = p.hp / p.maxHp; p.maxHp = newMax; p.hp = Math.min(p.maxHp, Math.round(p.maxHp * ratio)); }
   // Eco -> coin & XP gain (meta only).
   p.mult.ecoGain = 1 + metaTier('UPG_ECO') * 0.08;
@@ -1346,8 +1425,20 @@ function recomputeStats() {
   p.mult.pickup   *= bo.pickupMul;
   p.mult.damageMul *= bo.damageMul;
   p.mult.crit = 0.05 + bo.critAdd;
+  p.mult.critMult = 2.0;
   p.speed = p.baseSpeed * bo.speedMul;
   p.regen = 0.5 + bo.regenFlat;
+  // Secondary passives (adaptations).
+  p.mult.cooldown  *= (1 - adapt('reflex') * 0.06);
+  p.mult.damageMul *= (1 + adapt('potency') * 0.07);
+  p.speed          *= (1 + adapt('motility') * 0.06);
+  p.regen          += adapt('regen') * 0.6;
+  p.mult.crit      += adapt('lethality') * 0.03;
+  p.mult.critMult  += adapt('lethality') * 0.15;
+  // Run mutations (objective rewards) stack on top.
+  p.mult.damageMul *= (1 + 0.20 * mut('power'));
+  p.mult.cooldown  *= Math.pow(0.88, mut('haste'));
+  p.mult.area      *= (1 + 0.20 * mut('giant'));
   // Pickup radius in world units.
   p.pickupRadius = 90 * p.mult.pickup;
 }
@@ -1731,6 +1822,13 @@ const FIRE = {
       dealArc(p.x, p.y, ang, s.arc, range, s.damage, opts);
       addFx({ kind: 'whip', x: p.x, y: p.y, ang, arc: s.arc, range, life: 0.18, maxLife: 0.18, color: '#7dff9a' });
     }
+    // MUTATION · Bilateral Symmetry: counter-rotating mirror zone(s), cast simultaneously.
+    const mir = mut('mirror');
+    for (let m = 1; m <= mir; m++) for (let i = 0; i < s.count; i++) {
+      const ang = -w.phase + i * (TAU / s.count) + m * 0.5;
+      dealArc(p.x, p.y, ang, s.arc, range, s.damage * 0.8, { knockback: s.knockback * 0.6, melee: true });
+      addFx({ kind: 'whip', x: p.x, y: p.y, ang, arc: s.arc, range, life: 0.18, maxLife: 0.18, color: '#b07bff' });
+    }
   },
   vortex(w, s, p) {                                       // APEX: permanent buzz-saw aura
     const range = s.range * p.mult.area * 1.25;
@@ -1742,7 +1840,8 @@ const FIRE = {
   },
   vacuole(w, s, p) {
     const target = nearestEnemy(p.x, p.y, 900) || randomEnemyOnScreen();
-    for (let i = 0; i < s.count; i++) {
+    const count = s.count + mut('multishot');
+    for (let i = 0; i < count; i++) {
       const ang = target ? angTo(p.x, p.y, target.x, target.y) + rand(-0.18, 0.18) : rand(0, TAU);
       const spd = s.projSpeed * p.mult.projSpeed;
       fireProjectile({
@@ -1764,8 +1863,9 @@ const FIRE = {
     const area = p.mult.area;
     const behind = Math.atan2(-p.dy, -p.dx);
     const moving = lenOf(p.dx, p.dy) > 5;
-    for (let i = 0; i < s.count; i++) {
-      const spread = (i - (s.count - 1) / 2) * 0.5;
+    const count = s.count + mut('multishot');
+    for (let i = 0; i < count; i++) {
+      const spread = (i - (count - 1) / 2) * 0.5;
       const a = (moving ? behind : rand(0, TAU)) + spread;
       const off = 26;
       makeHazard({
@@ -1778,15 +1878,19 @@ const FIRE = {
   },
   phage(w, s, p) {
     const apex = w.apexId === 'retro';
-    for (let i = 0; i < s.count; i++) {
+    const count = s.count + mut('multishot');
+    const splitHitN = mut('splitHit'), splitEndN = mut('splitEnd');
+    const rad = 7 * (1 + 0.12 * mut('giant'));
+    for (let i = 0; i < count; i++) {
       const target = randomEnemyOnScreen();
       const ang = target ? angTo(p.x, p.y, target.x, target.y) : rand(0, TAU);
       const spd = s.speed * p.mult.projSpeed;
       fireProjectile({
         kind: 'dart', x: p.x, y: p.y, dx: Math.cos(ang) * spd, dy: Math.sin(ang) * spd,
-        r: 7, life: 1.6 * p.mult.projDur, spr: SPR.dart, color: '#b07bff',
+        r: rad, life: 1.6 * p.mult.projDur, spr: SPR.dart, color: '#b07bff',
         damage: s.damage, pierce: apex ? 9999 : s.pierce, homing: s.homing, speed: spd,
-        paralyze: s.paralyze, bounce: apex ? 6 : 0, charm: apex ? 5 : 0, hitSet: new Set()
+        paralyze: s.paralyze, bounce: apex ? 6 : 0, charm: apex ? 5 : 0, hitSet: new Set(),
+        canSplit: !apex, splitHitN, splitEndN
       });
     }
   },
@@ -1798,6 +1902,11 @@ const FIRE = {
     for (const d of dirs) {
       dealArc(p.x, p.y, d, s.arc, range, s.damage, { knockback: s.knockback });
       addFx({ kind: 'wave', x: p.x, y: p.y, ang: d, arc: s.arc, range, life: 0.34, maxLife: 0.34, color: '#ff5fa2' });
+    }
+    // MUTATION · Bilateral Symmetry: add perpendicular side waves.
+    if (mut('mirror') > 0) for (const d of [back + Math.PI / 2, back - Math.PI / 2]) {
+      dealArc(p.x, p.y, d, s.arc, range, s.damage * 0.8, { knockback: s.knockback * 0.7 });
+      addFx({ kind: 'wave', x: p.x, y: p.y, ang: d, arc: s.arc, range, life: 0.34, maxLife: 0.34, color: '#b07bff' });
     }
     if (s.surge) { p.surge = Math.max(p.surge, s.surgeDur); }
     if (w.apexId === 'wake') { dropSlipstream(p, range); }
@@ -1834,9 +1943,25 @@ function fireProjectile(o) {
   const b = projPool.obtain();
   Object.assign(b, { kind: 'dart', x: 0, y: 0, dx: 0, dy: 0, r: 6, life: 1.5, spr: null, color: '#fff',
     damage: 0, pierce: 0, homing: 0, speed: 0, drag: 0, paralyze: 0, bounce: 0, charm: 0,
-    hostile: false, onHit: null, onExpire: null, hitSet: null, spin: 0, rot: 0 }, o);
+    hostile: false, onHit: null, onExpire: null, hitSet: null, spin: 0, rot: 0,
+    canSplit: false, splitHitN: 0, splitEndN: 0, isFragment: false }, o);
   game.projectiles.push(b);
   return b;
+}
+/* MUTATION · Schizogony / Terminal Fission — burst a projectile into shrapnel.  *
+ * Fragments are flagged isFragment so they can never split again (no runaway   *
+ * exponential spawning).                                                       */
+function spawnFragments(b, n) {
+  n = Math.min(n, 6);
+  const base = Math.max(1, (b.damage || 12) * 0.5);
+  const spd = (lenOf(b.dx, b.dy) || b.speed || 420) * 0.85;
+  for (let k = 0; k < n; k++) {
+    const a = (k / n) * TAU + rand(-0.2, 0.2);
+    fireProjectile({ kind: 'dart', x: b.x, y: b.y, dx: Math.cos(a) * spd, dy: Math.sin(a) * spd,
+      r: Math.max(4, b.r * 0.7), life: 0.7, spr: SPR.dart, color: '#ffd1a0',
+      damage: base, pierce: 0, speed: spd, hitSet: new Set(), isFragment: true });
+  }
+  spawnParticles(b.x, b.y, '#ffd1a0', 4, { life: 0.3, speed: 120 });
 }
 /* hostile (enemy/boss) bullet helper */
 function fireHostile(x, y, ang, speed, dmg, color = '#ff7a7a', r = 8) {
@@ -1865,7 +1990,11 @@ function updateProjectiles(dt) {
       if (b.x < cx - hw || b.x > cx + hw) { b.dx *= -1; b.x = clamp(b.x, cx - hw, cx + hw); b.bounce--; }
       if (b.y < cy - hh || b.y > cy + hh) { b.dy *= -1; b.y = clamp(b.y, cy - hh, cy + hh); b.bounce--; }
     }
-    if (b.life <= 0) { if (b.onExpire) b.onExpire(b); arr[i] = arr[arr.length - 1]; arr.pop(); projPool.release(b); continue; }
+    if (b.life <= 0) {
+      if (b.onExpire) b.onExpire(b);
+      if (b.splitEndN && b.canSplit && !b.isFragment) spawnFragments(b, b.splitEndN + 1);   // Terminal Fission
+      arr[i] = arr[arr.length - 1]; arr.pop(); projPool.release(b); continue;
+    }
 
     if (b.hostile) {
       // enemy bullet vs player
@@ -1891,7 +2020,10 @@ function updateProjectiles(dt) {
         if (b.pierce <= 0) { consumed = true; break; }
         b.pierce--;
       }
-      if (consumed) { arr[i] = arr[arr.length - 1]; arr.pop(); projPool.release(b); continue; }
+      if (consumed) {
+        if (b.splitHitN && b.canSplit && !b.isFragment) spawnFragments(b, b.splitHitN + 1);   // Schizogony
+        arr[i] = arr[arr.length - 1]; arr.pop(); projPool.release(b); continue;
+      }
     }
   }
 }
@@ -2466,7 +2598,7 @@ function spawnBoostPad() {
   const a = rand(0, TAU), dst = rand(380, 640);
   game.pads.push({
     x: game.player.x + Math.cos(a) * dst, y: game.player.y + Math.sin(a) * dst,
-    r: 64, rarityIdx: rIdx, stat: pick(BOOST_STATS),
+    r: 118, rarityIdx: rIdx, stat: pick(BOOST_STATS),
     progress: 0, need: BOOST_RARITIES[rIdx].channel, life: 45,
   });
 }
@@ -2543,8 +2675,10 @@ function spawnNutrients(o) {
 function spawnGolden(x, y) {
   const e = spawnEnemy('bacterium', x, y, {});
   e.golden = true; e.behavior = 'flee'; e.kbImmune = false;
-  e.maxHp = e.hp = 600 * Math.pow(1 + 0.015 * game.time, 1.1);
-  e.r = 22; e.speed = 235; e.phase = rand(0, TAU);
+  // Catchable on purpose: clearly slower than the player's ~210 base speed, and
+  // not too tanky, so you can corner it AND shoot it down within the timer.
+  e.maxHp = e.hp = 170 * Math.pow(1 + 0.015 * game.time, 1.0);
+  e.r = 26; e.speed = 145; e.phase = rand(0, TAU);
   return e;
 }
 function rewardObjective() {
@@ -2557,6 +2691,7 @@ function rewardObjective() {
   bigBanner('✔ OBJECTIVE COMPLETE — +' + coins + '🪙', 3);
   game.shake = Math.max(game.shake, 8); game.flash = 0.2; game.flashColor = 'rgba(120,255,160,';
   clearObjectiveEntities(o); game.objective = null;
+  openMutationChoice();          // the reward: pick a stackable mutation
 }
 function failObjective() {
   const o = game.objective; if (!o) return;
@@ -2592,6 +2727,12 @@ function updateObjective(dt) {
     if (remaining === 0) { rewardObjective(); return; }
   } else if (o.type === 'hunt') {
     if (o.targetDown || !o.target || o.target.dead) { rewardObjective(); return; }
+    // Catching IS capturing: simply reaching the golden cell claims it (ranged
+    // builds can still gun it down — either way completes the hunt).
+    if (dist(p.x, p.y, o.target.x, o.target.y) < p.r + o.target.r + 6) {
+      spawnFloater(o.target.x, o.target.y - o.target.r, 'CAUGHT!', '#ffd166');
+      killEnemy(o.target); rewardObjective(); return;
+    }
   } else if (o.type === 'survive') {
     if (left <= 0) { rewardObjective(); return; }
     if (chance(dt * 3)) { const ty = weightedPickType(activeTypes(game.time)) || 'virus'; spawnRingEnemy(ty); }
@@ -3018,6 +3159,7 @@ function setupInput() {
     if (k === 'm') game.showMinimap = !game.showMinimap;
     if (k === 'r' && game.state === 'levelup') doReroll();
     if (game.state === 'levelup' && k >= '1' && k <= '4') { const idx = +k - 1; const cards = document.querySelectorAll('#levelup-cards .card'); if (cards[idx]) cards[idx].click(); }
+    if (game.state === 'mutation' && k >= '1' && k <= '3') { const idx = +k - 1; const cards = document.querySelectorAll('#mutation-cards .card'); if (cards[idx]) cards[idx].click(); }
   });
   addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); if (keymap[k]) input[keymap[k]] = false; });
   addEventListener('blur', () => { input.up = input.down = input.left = input.right = false; input.mouseDown = false; });
@@ -3119,6 +3261,22 @@ function refreshTray() {
       slot.innerHTML = `<span>${def.icon}</span>${pips}`; slot.title = def.name + ' · Tier ' + lv; }
     ps.appendChild(slot);
   }
+  // secondary adaptations (compact chips) after the six organelle slots
+  for (const id in p.adaptations) {
+    const def = ADAPT_BY_ID[id], lv = p.adaptations[id];
+    const chip = document.createElement('div'); chip.className = 'slot mini';
+    chip.innerHTML = `<span>${def.icon}</span><span class="lvl">${lv}</span>`;
+    chip.title = def.name + ' · Tier ' + lv + ' — ' + def.tierText(lv);
+    ps.appendChild(chip);
+  }
+  // run mutations (gold chips)
+  for (const id in game.mutations) {
+    const def = MUT_BY_ID[id], n = game.mutations[id];
+    const chip = document.createElement('div'); chip.className = 'slot mini mut';
+    chip.innerHTML = `<span>${def.icon}</span><span class="lvl">×${n}</span>`;
+    chip.title = def.name + ' ×' + n + ' — ' + def.desc;
+    ps.appendChild(chip);
+  }
 }
 
 /* ---- Level-up: build a weighted pool of 4 distinct evolution choices ---- */
@@ -3134,6 +3292,8 @@ function getLevelUpChoices() {
   if (hasWeaponSlot) for (const def of WEAPONS) if (!p.weapons.find(w => w.id === def.id)) pool.push({ kind: 'weapon-new', id: def.id, target: 1, weight: 7 });
   // new passives
   if (hasPassiveSlot) for (const def of PASSIVES) if (!(def.id in p.passives)) pool.push({ kind: 'passive-new', id: def.id, target: 1, weight: 6 });
+  // secondary adaptations (always offerable, stack to max — they don't use a slot)
+  for (const def of ADAPTATIONS) { const cur = p.adaptations[def.id] || 0; if (cur < def.max) pool.push({ kind: cur ? 'adapt-up' : 'adapt-new', id: def.id, target: cur + 1, weight: cur ? 6 : 5 }); }
   // fallbacks
   pool.push({ kind: 'heal', weight: 2 });
   pool.push({ kind: 'coins', weight: 2 });
@@ -3174,6 +3334,10 @@ function buildChoiceCard(c, i) {
     const def = PASSIVE_BY_ID[c.id]; cls += ' passive';
     icon = def.icon; type = 'Passive Trait'; name = def.name; level = c.kind === 'passive-new' ? 'NEW · Tier 1' : 'Tier ' + c.target;
     desc = def.tierText(c.target) + ' — ' + def.desc; fact = def.fact;
+  } else if (c.kind === 'adapt-up' || c.kind === 'adapt-new') {
+    const def = ADAPT_BY_ID[c.id]; cls += ' passive';
+    icon = def.icon; type = 'Adaptation'; name = def.name; level = c.kind === 'adapt-new' ? 'NEW · Tier 1' : 'Tier ' + c.target;
+    desc = def.tierText(c.target) + ' — ' + def.desc; fact = def.fact;
   } else if (c.kind === 'heal') { cls += ' heal'; icon = '💚'; type = 'Recovery'; name = 'Cytoplasm Repair'; level = ''; desc = 'Restore 40% of max health instantly.'; fact = 'Cells repair their membranes by patching tears with internal vesicles within seconds of injury.'; }
   else { cls += ' heal'; icon = '🪙'; type = 'Resource'; name = 'Genetic Cache'; level = ''; desc = 'Gain 60 Genetic Code for the meta-lab.'; fact = 'DNA stores ~2 bits per base pair; your genome packs ~1.5 GB of data into every cell.'; }
   card.className = cls; card.style.animationDelay = (i * 0.05) + 's';
@@ -3186,6 +3350,7 @@ function buildChoiceCard(c, i) {
 function cardColor(c) {
   if (c.id && WEAPON_BY_ID[c.id]) return WEAPON_BY_ID[c.id].color;
   if (c.id && PASSIVE_BY_ID[c.id]) return PASSIVE_BY_ID[c.id].color;
+  if (c.id && ADAPT_BY_ID[c.id]) return ADAPT_BY_ID[c.id].color;
   return '#6dff8a';
 }
 function chooseUpgrade(c) {
@@ -3194,6 +3359,7 @@ function chooseUpgrade(c) {
   else if (c.kind === 'weapon-new') { p.weapons.push({ id: c.id, level: 1, timer: 0, apex: false, apexId: null }); markCodex(c.id); }
   else if (c.kind === 'passive-up') { p.passives[c.id] = c.target; recomputeStats(); markCodex(c.id); }
   else if (c.kind === 'passive-new') { p.passives[c.id] = 1; recomputeStats(); markCodex(c.id); }
+  else if (c.kind === 'adapt-up' || c.kind === 'adapt-new') { p.adaptations[c.id] = c.target; recomputeStats(); }
   else if (c.kind === 'heal') { p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.4); }
   else if (c.kind === 'coins') { game.coinsThisRun += 60; }
   refreshTray();
@@ -3239,6 +3405,38 @@ function chooseApex(apexDef) {
 }
 $('apex-skip').onclick = () => { hideOverlay('apex-modal'); resumeRun(); };
 
+/* ---- Mutation choice modal (objective reward) ---- */
+function getMutationChoices() {
+  const avail = MUTATIONS.filter(m => mut(m.id) < m.max);
+  shuffle(avail);
+  return avail.slice(0, 3);
+}
+function openMutationChoice() {
+  const choices = getMutationChoices();
+  if (!choices.length) { gainCoins(150); bigBanner('🧬 GENOME SATURATED — +150🪙', 2.6); resumeRun(); return; }
+  game.state = 'mutation';
+  const wrap = $('mutation-cards'); wrap.innerHTML = '';
+  choices.forEach((m, i) => wrap.appendChild(buildMutationCard(m, i)));
+  showOverlay('mutation-modal');
+}
+function buildMutationCard(m, i) {
+  const have = mut(m.id);
+  const card = document.createElement('div'); card.className = 'card apex'; card.style.animationDelay = (i * 0.05) + 's';
+  card.innerHTML = `<div class="corner">${i + 1}</div><div class="ic-big" style="color:${m.color}">${m.icon}</div>
+    <div class="ctype">Mutation</div><div class="cname">${m.name}</div>
+    <div class="clevel">${have ? 'STACK → ×' + (have + 1) : 'NEW'}</div>
+    <div class="cdesc">${m.desc}</div><div class="cfact">🔬 ${m.fact}</div>`;
+  card.onclick = () => chooseMutation(m);
+  return card;
+}
+function chooseMutation(m) {
+  game.mutations[m.id] = (game.mutations[m.id] || 0) + 1;
+  recomputeStats(); refreshTray();
+  hideOverlay('mutation-modal');
+  bigBanner('🧬 MUTATION: ' + m.name + (mut(m.id) > 1 ? '  ×' + mut(m.id) : ''), 3);
+  resumeRun();
+}
+
 /* ---- Run lifecycle ---- */
 function setHud(v) { $('hud').style.display = v ? 'block' : 'none'; }
 
@@ -3250,7 +3448,7 @@ function startRun(mode) {
   game.enemies = []; game.projectiles = []; game.pickups = []; game.hazards = [];
   game.particles = []; game.floaters = []; game.clones = []; game.effects = [];
   game.env = []; game.objective = null; game._finalized = false;
-  game.pads = []; game.boosts = defaultBoosts(); game.boostLog = [];
+  game.pads = []; game.boosts = defaultBoosts(); game.boostLog = []; game.mutations = {};
   game.kills = 0; game.killsByType = {}; game.coinsThisRun = 0; game.xpOrbsAlive = 0;
   game.pendingLevelUps = 0; game.apexOffered = {}; game.boss = null; game.bossSpawned = false;
   game.win = false; game.questsCompletedThisRun = [];
@@ -3282,6 +3480,8 @@ function togglePause() {
       ['Time', `${mm}:${String(ss).padStart(2, '0')}`], ['Level', p.level],
       ['Kills', game.kills.toLocaleString()], ['Run Coins', game.coinsThisRun.toLocaleString()],
       ['Weapons', p.weapons.length + '/6'], ['Passives', Object.keys(p.passives).length + '/6'],
+      ['Adaptations', Object.values(p.adaptations || {}).reduce((a, b) => a + b, 0) + ' tiers'],
+      ['Mutations', Object.values(game.mutations || {}).reduce((a, b) => a + b, 0) + ' spliced'],
       ['Boosts', (game.boostLog || []).length + ' channeled'], ['Challenges', (game.director ? game.director.objCount : 0) + ' triggered'],
     ]);
     showOverlay('pause-modal');
@@ -3347,6 +3547,7 @@ function serializeRun() {
     questsDone: (game.questsCompletedThisRun || []).map(q => q.id),
     boosts: Object.assign({}, game.boosts || defaultBoosts()),
     boostLog: (game.boostLog || []).slice(),
+    mutations: Object.assign({}, game.mutations || {}),
     win: game.win,
     director: {
       weight: d.weight || 0, spawnTimer: d.spawnTimer || 0, eliteIdx: d.eliteIdx || 0, bossDone: !!d.bossDone,
@@ -3360,6 +3561,7 @@ function serializeRun() {
       level: p.level, xp: p.xp, xpNext: p.xpNext,
       weapons: p.weapons.map(w => ({ id: w.id, level: w.level, apex: !!w.apex, apexId: w.apexId || null })),
       passives: Object.assign({}, p.passives),
+      adaptations: Object.assign({}, p.adaptations || {}),
     },
     savedAt: Date.now(),
   };
@@ -3380,9 +3582,10 @@ function resumeSavedRun() {
   game.enemies = []; game.projectiles = []; game.pickups = []; game.hazards = [];
   game.particles = []; game.floaters = []; game.clones = []; game.effects = [];
   game.env = []; game.objective = null; game._finalized = false;
-  // restore run-permanent boosts BEFORE recomputeStats folds them in
+  // restore run-permanent boosts + mutations BEFORE recomputeStats folds them in
   game.pads = []; game.boosts = Object.assign(defaultBoosts(), snap.boosts || {});
   game.boostLog = (snap.boostLog || []).slice();
+  game.mutations = Object.assign({}, snap.mutations || {});
   game.kills = snap.kills || 0; game.killsByType = Object.assign({}, snap.killsByType || {});
   game.coinsThisRun = snap.coinsThisRun || 0; game.xpOrbsAlive = 0;
   game.pendingLevelUps = snap.pendingLevelUps || 0; game.apexOffered = Object.assign({}, snap.apexOffered || {});
@@ -3397,6 +3600,7 @@ function resumeSavedRun() {
   p.level = ps.level; p.xp = ps.xp; p.xpNext = ps.xpNext || xpForLevel(p.level);
   p.weapons = (ps.weapons || []).map(w => ({ id: w.id, level: w.level, timer: 0, apex: !!w.apex, apexId: w.apexId || null }));
   p.passives = Object.assign({}, ps.passives || {});
+  p.adaptations = Object.assign({}, ps.adaptations || {});
   game.player = p;
   recomputeStats();                                  // rebuild derived multipliers + maxHp from baseMaxHp + passives
   p.hp = clamp(ps.hp != null ? ps.hp : p.maxHp, 1, p.maxHp);
@@ -3553,7 +3757,7 @@ const DEV_TABS = [
   { id: 'weapons', label: '🧬 Weapons' }, { id: 'passives', label: '🔬 Organelles' },
   { id: 'apex', label: '⚛ Apex' }, { id: 'chars', label: '🧫 Cells' },
   { id: 'objectives', label: '🎯 Objectives' }, { id: 'env', label: '🌋 Hazards' },
-  { id: 'boosts', label: '⬆ Boosts' }, { id: 'formulas', label: '📐 Formulas' },
+  { id: 'boosts', label: '⬆ Boosts' }, { id: 'muts', label: '🧬 Mutations' }, { id: 'formulas', label: '📐 Formulas' },
 ];
 let devTab = 'enemies';
 function openDev() { hideAllOverlays(); buildDevTabs(); buildDev(); showOverlay('dev-modal'); }
@@ -3629,6 +3833,15 @@ function buildDev() {
       h += `</tr>`;
     }
     h += `</table><p class="dev-note" style="margin-top:10px">Channel circles spawn near the player — first at <code>0:30</code>, then every <code>40–60s</code> (max 2 in the world, 45s lifetime). Stand inside for <code>${BOOST_RARITIES.map(r => r.channel + 's').join(' / ')}</code> (green→orange) to claim; stepping out drains progress at <code>0.8×</code>. Gains are permanent for the run, stack multiplicatively, and are kept by Save &amp; Quit.</p>`;
+  } else if (devTab === 'muts') {
+    h += `<div class="dev-sect"><h3>Run Mutations — objective rewards (stackable)</h3>
+      <table class="dev-table"><tr><th>Mutation</th><th>Max stacks</th><th>Effect per stack</th></tr>`;
+    for (const m of MUTATIONS) h += `<tr><td>${m.icon} <b>${m.name}</b></td><td class="num">×${m.max}</td><td class="dev-note">${m.desc}</td></tr>`;
+    h += `</table><p class="dev-note" style="margin-top:8px">Granted as a 3-card choice each time you complete an in-run objective. They stack and persist through Save &amp; Quit.</p></div>
+      <div class="dev-sect"><h3>Secondary passives — "Adaptations" (level-up pool)</h3>
+      <table class="dev-table"><tr><th>Adaptation</th><th>Max tier</th><th>Per tier</th></tr>`;
+    for (const a of ADAPTATIONS) h += `<tr><td>${a.icon} <b>${a.name}</b></td><td class="num">T${a.max}</td><td class="dev-note">${a.tierText(1)}</td></tr>`;
+    h += `</table></div>`;
   } else {
     h += `<div class="dev-sect"><h3>Core formulas</h3><table class="dev-table"><tr><th>System</th><th>Formula</th></tr>
       <tr><td>XP to next level</td><td class="num">round(10·N^1.6 + 25)</td></tr>

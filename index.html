@@ -271,6 +271,34 @@
   #objective .obj-fill { height: 100%; width: 0%; border-radius: 4px;
     background: linear-gradient(90deg, var(--bio-amber), var(--bio-green)); box-shadow: 0 0 8px var(--bio-amber); transition: width 0.15s linear; }
 
+  /* ---- Paused: large stat sheet + arsenal (Spell-Brigade style) ---- */
+  #pause-modal .panel { max-width: 920px; width: 94vw; max-height: 92vh; overflow-y: auto; }
+  #pause-sub { color: var(--bio-cyan); font-size: 13px; margin-top: 4px; letter-spacing: 0.5px; }
+  #pause-body { width: 100%; margin-top: 14px; }
+  .ps-section { margin-bottom: 18px; }
+  .ps-section h3 { font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--bio-green);
+    margin-bottom: 10px; opacity: 0.9; }
+  .ps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 9px; }
+  .ps-cell { display: flex; align-items: center; gap: 10px; padding: 9px 13px;
+    background: rgba(8, 20, 28, 0.7); border: 1px solid rgba(74,226,255,0.14); border-radius: 10px; }
+  .ps-cell .ps-ic { font-size: 19px; width: 22px; text-align: center; }
+  .ps-cell .ps-lbl { color: var(--ink-dim); font-size: 13px; flex: 1; }
+  .ps-cell .ps-val { font-size: 19px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .ps-cell .ps-val.up { color: var(--bio-green); text-shadow: 0 0 10px rgba(109,255,138,0.45); }
+  .ps-cell .ps-val.down { color: var(--bio-pink); }
+  .ps-arsenal { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 11px; }
+  .ps-item { background: rgba(8, 20, 28, 0.7); border: 1px solid rgba(74,226,255,0.16); border-radius: 11px; padding: 11px 13px; }
+  .ps-item.apex { border-color: var(--bio-amber); box-shadow: 0 0 16px rgba(255,209,102,0.18); }
+  .ps-item-h { display: flex; align-items: center; gap: 9px; }
+  .ps-item-ic { font-size: 22px; filter: drop-shadow(0 0 8px currentColor); }
+  .ps-item-nm { font-size: 15px; font-weight: 800; flex: 1; }
+  .ps-item-lv { font-size: 11px; font-weight: 800; color: var(--bio-amber); }
+  .ps-item-d { font-size: 12px; color: var(--ink-dim); line-height: 1.5; margin-top: 6px; }
+  .ps-item-s { font-size: 11px; color: var(--bio-cyan); margin-top: 5px; font-variant-numeric: tabular-nums;
+    font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .ps-buffs { font-size: 13px; color: var(--bio-amber); padding: 8px 12px; background: rgba(40,30,8,0.4);
+    border: 1px solid rgba(255,209,102,0.3); border-radius: 10px; }
+
   /* ---- Locked / selected character cards ---- */
   .card.locked { opacity: 0.5; cursor: not-allowed; filter: grayscale(0.6); }
   .card.locked:hover { transform: none; box-shadow: none; border-color: rgba(74,226,255,0.25); }
@@ -360,7 +388,7 @@
     <div class="hint">
       Move: <span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span>
       / <span class="kbd">Arrows</span> / Mouse-hold · Weapons fire automatically<br/>
-      Pause: <span class="kbd">Esc</span> · Reroll level-up: <span class="kbd">R</span>
+      Pause: <span class="kbd">Esc</span> (view your stats &amp; arsenal) · Reroll level-up: <span class="kbd">R</span> · Map: <span class="kbd">M</span>
     </div>
     <div class="credit">Educational survivors prototype · Canvas2D · single-file</div>
   </div>
@@ -412,9 +440,10 @@
 
   <!-- ===== Pause ===== -->
   <div class="overlay" id="pause-modal">
-    <div class="panel col">
-      <div class="modal-head"><h2>SIMULATION PAUSED</h2></div>
-      <div id="pause-stats" class="stat-grid"></div>
+    <div class="panel">
+      <div class="modal-head"><h2>SIMULATION PAUSED</h2><p id="pause-sub"></p></div>
+      <div class="codex-tabs" id="pause-tabs"></div>
+      <div id="pause-body"></div>
       <div class="menu-actions">
         <button class="btn primary" data-act="resume">▶ Resume</button>
         <button class="btn" data-act="savequit">💾 Save &amp; Quit to Menu</button>
@@ -3537,6 +3566,46 @@ function updateObjectiveHUD() {
     <div class="obj-bar"><div class="obj-fill" style="width:${clamp(frac * 100, 0, 100)}%"></div></div>`;
 }
 
+/* ---- Live stat sheet ---------------------------------------------------- *
+ * Shows the cell's effective, current stats and updates the instant a level- *
+ * up, boost pad, mutation or power-up changes recomputeStats(). Each value is *
+ * coloured green when above the universal baseline (or pink when below, e.g.  *
+ * the Phagocyte's slower speed) so improvements are obvious at a glance.      */
+function statPct(m) { const d = Math.round((m - 1) * 100); return (d >= 0 ? '+' : '') + d + '%'; }
+const STAT_ROWS = [
+  { k: 'hp',   ic: '❤️', lbl: 'Max Health',      get: p => String(Math.round(p.maxHp)),                            rat: p => p.maxHp / 100 },
+  { k: 'rgn',  ic: '🩹', lbl: 'Regeneration',    get: p => p.regen.toFixed(1) + '/s',                              rat: p => p.regen / 0.5 },
+  { k: 'arm',  ic: '🛡️', lbl: 'Armor',           get: p => String(Math.round(p.mult.flatReduce)),                  rat: p => 1 + (p.mult.flatReduce > 0 ? 0.5 : 0) },
+  { k: 'spd',  ic: '🏃', lbl: 'Move Speed',      get: p => String(Math.round(p.speed)),                            rat: p => p.speed / 210 },
+  { k: 'dmg',  ic: '💥', lbl: 'Damage',          get: p => '×' + ((1 + p.mult.ribosome) * p.mult.damageMul).toFixed(2), rat: p => (1 + p.mult.ribosome) * p.mult.damageMul },
+  { k: 'atk',  ic: '⚡', lbl: 'Attack Speed',    get: p => statPct(1 / p.mult.cooldown),                           rat: p => 1 / p.mult.cooldown },
+  { k: 'crt',  ic: '🎯', lbl: 'Crit Chance',     get: p => Math.round(p.mult.crit * 100) + '%',                    rat: p => p.mult.crit / 0.05 },
+  { k: 'crd',  ic: '💢', lbl: 'Crit Damage',     get: p => '×' + p.mult.critMult.toFixed(2),                       rat: p => p.mult.critMult / 2 },
+  { k: 'area', ic: '📐', lbl: 'Area / Size',     get: p => statPct(p.mult.area),                                   rat: p => p.mult.area },
+  { k: 'prj',  ic: '🚀', lbl: 'Projectile Spd',  get: p => statPct(p.mult.projSpeed),                              rat: p => p.mult.projSpeed },
+  { k: 'pck',  ic: '🧲', lbl: 'Pickup Radius',   get: p => String(Math.round(p.pickupRadius)),                     rat: p => p.mult.pickup },
+  { k: 'eco',  ic: '🪙', lbl: 'XP & Coins',      get: p => statPct(p.mult.ecoGain),                                rat: p => p.mult.ecoGain },
+];
+/* Compact "what is this weapon doing right now" readout, built from getStats. */
+const STAT_LABEL = {
+  count: '×', damage: 'dmg', cooldown: 'cd', pierce: 'pierce', blast: 'blast', range: 'range',
+  poolRadius: 'pool', poolDur: 'pool·s', orbit: 'orbit', hits: 'durability', scalar: 'inherit',
+  speed: 'velocity', knockback: 'knock', arc: 'arc', cloudDur: 'cloud·s', cloudDps: 'cloud/s',
+  count2: '', surgeDur: 'surge·s',
+};
+function weaponSummary(def, lvl) {
+  const s = def.getStats(lvl), out = [];
+  for (const k in s) {
+    if (typeof s[k] !== 'number' || !s[k] || !(k in STAT_LABEL) || STAT_LABEL[k] === '') continue;
+    let v = s[k];
+    if (k === 'arc') v = Math.round(v * 180 / Math.PI) + '°';
+    else if (k === 'scalar') v = Math.round(v * 100) + '%';
+    else v = Math.round(v * 100) / 100;
+    out.push(k === 'count' ? v + STAT_LABEL[k] : STAT_LABEL[k] + ' ' + v);
+  }
+  return out.join('  ');
+}
+
 function refreshTray() {
   const p = game.player;
   const ws = $('weapon-slots'), ps = $('passive-slots');
@@ -3768,20 +3837,84 @@ function startRun(mode) {
   toast(ch.icon + ' ' + ch.name + ' · opens with ' + WEAPON_BY_ID[ch.weapon].name, 2.6);
 }
 function resumeRun() { if (game.player && game.player.hp > 0) { game.state = 'running'; hideOverlay('pause-modal'); } }
+const PAUSE_TABS = [{ id: 'stats', label: '📊 Stats' }, { id: 'arsenal', label: '🧬 Arsenal' }];
+let pauseTab = 'stats';
 function togglePause() {
   if (game.state === 'running') {
     game.state = 'paused';
-    const p = game.player, mm = Math.floor(game.time / 60), ss = Math.floor(game.time % 60);
-    $('pause-stats').innerHTML = statRows([
-      ['Time', `${mm}:${String(ss).padStart(2, '0')}`], ['Level', p.level],
-      ['Kills', game.kills.toLocaleString()], ['Run Coins', game.coinsThisRun.toLocaleString()],
-      ['Weapons', p.weapons.length + '/6'], ['Passives', Object.keys(p.passives).length + '/6'],
-      ['Adaptations', Object.values(p.adaptations || {}).reduce((a, b) => a + b, 0) + ' tiers'],
-      ['Mutations', Object.values(game.mutations || {}).reduce((a, b) => a + b, 0) + ' spliced'],
-      ['Boosts', (game.boostLog || []).length + ' channeled'], ['Challenges', (game.director ? game.director.objCount : 0) + ' triggered'],
-    ]);
+    buildPauseTabs(); renderPause();
     showOverlay('pause-modal');
   } else if (game.state === 'paused') { resumeRun(); }
+}
+function buildPauseTabs() {
+  const w = $('pause-tabs'); w.innerHTML = '';
+  for (const t of PAUSE_TABS) {
+    const e = document.createElement('div'); e.className = 'codex-tab' + (t.id === pauseTab ? ' active' : '');
+    e.textContent = t.label; e.onclick = () => { pauseTab = t.id; buildPauseTabs(); renderPause(); };
+    w.appendChild(e);
+  }
+}
+function renderPause() {
+  const p = game.player; if (!p) return;
+  const mm = Math.floor(game.time / 60), ss = Math.floor(game.time % 60), ch = CHAR_BY_ID[game.character];
+  $('pause-sub').textContent = (ch ? ch.icon + ' ' + ch.name : 'Cell') + '  ·  ' + mm + ':' + String(ss).padStart(2, '0') + '  ·  Level ' + p.level;
+  $('pause-body').innerHTML = pauseTab === 'arsenal' ? pauseArsenalHTML(p) : pauseStatsHTML(p);
+}
+function pauseStatsHTML(p) {
+  let stats = '';
+  for (const r of STAT_ROWS) {
+    const rr = r.rat ? r.rat(p) : 1, cls = rr > 1.005 ? ' up' : (rr < 0.995 ? ' down' : '');
+    stats += `<div class="ps-cell"><span class="ps-ic">${r.ic}</span><span class="ps-lbl">${r.lbl}</span><span class="ps-val${cls}">${r.get(p)}</span></div>`;
+  }
+  const adaptN = Object.values(p.adaptations || {}).reduce((a, b) => a + b, 0);
+  const mutN = Object.values(game.mutations || {}).reduce((a, b) => a + b, 0);
+  const run = [
+    ['☠', 'Kills', game.kills.toLocaleString()], ['🪙', 'Run Coins', game.coinsThisRun.toLocaleString()],
+    ['🔫', 'Weapons', p.weapons.length + ' / 6'], ['🔬', 'Organelles', Object.keys(p.passives).length + ' / 6'],
+    ['🧬', 'Adaptations', adaptN + ' tiers'], ['🧪', 'Mutations', mutN + ' spliced'],
+    ['⬆', 'Boost Pads', (game.boostLog || []).length], ['🎯', 'Challenges', (game.director ? game.director.objCount : 0)],
+  ];
+  let runHtml = '';
+  for (const [ic, lbl, v] of run) runHtml += `<div class="ps-cell"><span class="ps-ic">${ic}</span><span class="ps-lbl">${lbl}</span><span class="ps-val">${v}</span></div>`;
+  const buffs = [];
+  if (p.frenzy > 0) buffs.push('⚡ Mitotic Frenzy ' + Math.ceil(p.frenzy) + 's');
+  if (p.powerSpeed > 0) buffs.push('🏃 Flagellar Sprint ' + Math.ceil(p.powerSpeed) + 's');
+  if (p.surge > 0) buffs.push('🌀 Propulsion Surge');
+  if (p.invulnTrail > 0) buffs.push('✨ Slipstream Invulnerability');
+  return `<div class="ps-section"><h3>Effective Stats — green = boosted above baseline</h3><div class="ps-grid">${stats}</div></div>`
+    + (buffs.length ? `<div class="ps-section"><div class="ps-buffs">Active: ${buffs.join('  ·  ')}</div></div>` : '')
+    + `<div class="ps-section"><h3>This Run</h3><div class="ps-grid">${runHtml}</div></div>`;
+}
+function pauseArsenalHTML(p) {
+  let h = '<div class="ps-section"><h3>Weapons — what each is doing now</h3><div class="ps-arsenal">';
+  for (const w of p.weapons) {
+    const def = WEAPON_BY_ID[w.id], apexDef = w.apex ? APEX_BY_BASE[w.id] : null;
+    const icon = apexDef ? apexDef.icon : def.icon, name = apexDef ? apexDef.name : def.name;
+    const lv = w.apex ? 'APEX' : ('Lv ' + w.level + '/' + def.maxLevel);
+    const desc = apexDef ? apexDef.desc : def.desc;
+    const summary = apexDef ? '' : `<div class="ps-item-s">${weaponSummary(def, w.level)}</div>`;
+    h += `<div class="ps-item${apexDef ? ' apex' : ''}"><div class="ps-item-h"><span class="ps-item-ic" style="color:${def.color}">${icon}</span><span class="ps-item-nm">${name}</span><span class="ps-item-lv">${lv}</span></div><div class="ps-item-d">${desc}</div>${summary}</div>`;
+  }
+  h += '</div></div>';
+  const groups = [
+    ['Organelles', p.passives, PASSIVE_BY_ID, (d, lv) => d.tierText(lv), 'T'],
+    ['Adaptations', p.adaptations, ADAPT_BY_ID, (d, lv) => d.tierText(lv), 'T'],
+  ];
+  for (const [title, reg, byId, fx, pfx] of groups) {
+    const ids = Object.keys(reg || {}); if (!ids.length) continue;
+    h += `<div class="ps-section"><h3>${title}</h3><div class="ps-arsenal">`;
+    for (const id of ids) { const d = byId[id], lv = reg[id];
+      h += `<div class="ps-item"><div class="ps-item-h"><span class="ps-item-ic" style="color:${d.color}">${d.icon}</span><span class="ps-item-nm">${d.name}</span><span class="ps-item-lv">${pfx}${lv}</span></div><div class="ps-item-d">${fx(d, lv)}</div></div>`; }
+    h += '</div></div>';
+  }
+  const muts = Object.keys(game.mutations || {});
+  if (muts.length) {
+    h += `<div class="ps-section"><h3>Mutations</h3><div class="ps-arsenal">`;
+    for (const id of muts) { const d = MUT_BY_ID[id], n = game.mutations[id];
+      h += `<div class="ps-item apex"><div class="ps-item-h"><span class="ps-item-ic" style="color:${d.color}">${d.icon}</span><span class="ps-item-nm">${d.name}</span><span class="ps-item-lv">×${n}</span></div><div class="ps-item-d">${d.desc}</div></div>`; }
+    h += '</div></div>';
+  }
+  return h;
 }
 function statRows(rows) { return rows.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join(''); }
 

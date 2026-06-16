@@ -1262,7 +1262,7 @@ const ENEMIES = {
   },
   spore: {
     id: 'spore', name: 'Toxic Fungal Spore', icon: '🟤', color: '#d8a85f', glow: '#ffb84d',
-    weight: 12, window: [120, 1080], freq: 0.32,
+    weight: 12, window: [360, 1080], freq: 0.32,
     hp: 60, damage: 12, speed: 60, radius: 22, xp: 10, coinChance: 0.06, coin: 3,
     behavior: 'mortar', standoff: 250,
     fact: 'Fungal spores are airborne reproductive cells with tough protective coats. Some trigger allergies; others, like ergot, produce powerful neuroactive toxins.',
@@ -2274,15 +2274,15 @@ function createDirector() {
  * Each entry is the {enemyType: weight} mix spawned during that 2-min block;   *
  * the last wave repeats if the run somehow runs long (endless caps here too).  */
 const WAVES = [
-  { name: 'Lysogenic Bloom',    mix: { virus: 1.0 } },                              // 0–2:00
-  { name: 'Flagellate Surge',   mix: { virus: 0.7, bacterium: 0.5, spore: 0.25 } }, // 2–4
-  { name: 'Chemotactic Swarm',  mix: { bacterium: 0.8, virus: 0.4, spore: 0.3 } },  // 4–6
-  { name: 'Spore Drift',        mix: { virus: 0.5, bacterium: 0.5, spore: 0.4 } },  // 6–8
-  { name: 'Toxic Tide',         mix: { bacterium: 0.6, spore: 0.7, virus: 0.3 } },  // 8–10
-  { name: 'Viral Resurgence',   mix: { virus: 1.1, spore: 0.4 } },                  // 10–12
-  { name: 'Mixed Culture',      mix: { virus: 0.5, bacterium: 0.6, spore: 0.5 } },  // 12–14
-  { name: 'Fungal Mass',        mix: { spore: 1.0, bacterium: 0.5 } },              // 14–16
-  { name: 'Final Bloom',        mix: { virus: 0.9, bacterium: 0.7, spore: 0.6 } },  // 16–18
+  { name: 'Lysogenic Bloom',    mix: { virus: 1.0 } },                              // 0–2:00  starter enemies only
+  { name: 'Flagellate Surge',   mix: { virus: 0.7, bacterium: 0.5 } },              // 2–4     starters + bacteria
+  { name: 'Chemotactic Swarm',  mix: { bacterium: 0.8, virus: 0.4 } },              // 4–6
+  { name: 'Spore Drift',        mix: { virus: 0.6, bacterium: 0.5, spore: 0.25 } }, // 6–8     inverters arrive — nerfed, starters mixed in
+  { name: 'Toxic Tide',         mix: { virus: 0.6, bacterium: 0.6, spore: 0.35 } }, // 8–10    was spore 0.7 -> 0.35, viruses blended in
+  { name: 'Viral Resurgence',   mix: { virus: 1.1, spore: 0.25 } },                 // 10–12
+  { name: 'Mixed Culture',      mix: { virus: 0.6, bacterium: 0.6, spore: 0.3 } },  // 12–14
+  { name: 'Fungal Mass',        mix: { virus: 0.6, spore: 0.5, bacterium: 0.5 } },  // 14–16   was spore 1.0 -> 0.5, viruses blended in
+  { name: 'Final Bloom',        mix: { virus: 0.9, bacterium: 0.7, spore: 0.4 } },  // 16–18
 ];
 function currentWave(t) { return WAVES[Math.min(Math.floor(t / 120), WAVES.length - 1)]; }
 /* Pick an enemy id from the active wave's weighted mix (or null if empty). */

@@ -2561,9 +2561,20 @@ function spawnEnemy(typeId, x, y, opts = {}) {
 function spawnRingEnemy(typeId) {
   const a = rand(0, TAU);
   const rad = camHalfDiag() + 70;
-  spawnEnemy(typeId, game.player.x + Math.cos(a) * rad, game.player.y + Math.sin(a) * rad);
+  const o = { x: game.player.x + Math.cos(a) * rad, y: game.player.y + Math.sin(a) * rad };
+  dishClamp(o, 40);                                   // keep spawns inside the dish wall
+  spawnEnemy(typeId, o.x, o.y);
 }
 function camHalfDiag() { return Math.hypot(view.w, view.h) / 2; }
+/* The entire stage is one gigantic circular PETRI DISH centred on the world
+ * origin (where the player starts). You roam it freely, but the glass rim at
+ * DISH_R is a hard wall — the edge of the world. */
+const DISH_R = 5500;
+function dishClamp(o, pad) {
+  const d = Math.hypot(o.x, o.y), lim = DISH_R - (pad || 0);
+  if (d > lim && d > 0) { const k = lim / d; o.x *= k; o.y *= k; return true; }
+  return false;
+}
 
 /* ---- Pickups ----------------------------------------------------------- */
 /* ---- Floor power-ups (consumable drops: magnet, health, speed, bomb, …) --- */
@@ -3400,6 +3411,7 @@ function updateEnemies(dt) {
       }
       e.x += vx * speedMul * dt; e.y += vy * speedMul * dt;
       e.angle = lerp(e.angle, Math.atan2(vy, vx), 0.2);
+      dishClamp(e, e.r);                              // microbes are bounded by the dish wall too
     }
 
     // ---- separation so the swarm doesn't fully overlap (broad-phase) ----
@@ -3611,6 +3623,10 @@ function updatePlayer(dt) {
   }
   p.dx = lerp(p.dx, ix * spd, 0.25); p.dy = lerp(p.dy, iy * spd, 0.25);
   p.x += p.dx * dt; p.y += p.dy * dt;
+  // PETRI-DISH WALL: stop at the rim and slide along it (no passing through).
+  { const d = Math.hypot(p.x, p.y), lim = DISH_R - p.r - 4;
+    if (d > lim && d > 0) { const nx = p.x / d, ny = p.y / d; p.x = nx * lim; p.y = ny * lim;
+      const vd = p.dx * nx + p.dy * ny; if (vd > 0) { p.dx -= nx * vd; p.dy -= ny * vd; } } }
   if (il > 0.01) p.angle = Math.atan2(iy, ix);
 
   // Stationary timer — feeds the "while standing still" mutations (Sessile Stance, Anchored Metabolism).
@@ -4060,6 +4076,7 @@ function render(time) {
   ctx.save();
   ctx.translate(ox, oy);
 
+  drawDishFloor();                 // agar culture medium inside the dish
   drawGrid(cam);
   if (game.state !== 'menu') {
     drawEnvironment(t);
@@ -4075,6 +4092,7 @@ function render(time) {
     drawParticles();
     drawFloaters();
   }
+  drawDishRim(t);                  // the glass wall — the edge of the world
   ctx.restore();
 
   // ---- screen-space overlays ----
@@ -4085,12 +4103,34 @@ function render(time) {
 }
 
 function drawGrid(cam) {
-  const step = 70;
+  const step = 70, dr2 = DISH_R * DISH_R;
   const x0 = Math.floor((cam.x - view.w / 2) / step) * step;
   const y0 = Math.floor((cam.y - view.h / 2) / step) * step;
   ctx.fillStyle = 'rgba(74,226,255,0.05)';
   for (let x = x0; x < cam.x + view.w / 2 + step; x += step)
-    for (let y = y0; y < cam.y + view.h / 2 + step; y += step) { ctx.beginPath(); ctx.arc(x, y, 1.4, 0, TAU); ctx.fill(); }
+    for (let y = y0; y < cam.y + view.h / 2 + step; y += step) { if (x * x + y * y > dr2) continue; ctx.beginPath(); ctx.arc(x, y, 1.4, 0, TAU); ctx.fill(); }
+}
+/* Petri-dish floor: a faint agar-gel tint filling the dish so the inside reads as
+ * culture medium and everything beyond the rim is the dark void. */
+function drawDishFloor() {
+  const g = ctx.createRadialGradient(0, 0, DISH_R * 0.15, 0, 0, DISH_R);
+  g.addColorStop(0, 'rgba(26,58,50,0.22)'); g.addColorStop(0.72, 'rgba(16,40,38,0.15)'); g.addColorStop(1, 'rgba(8,22,22,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, DISH_R, 0, TAU); ctx.fill();
+}
+/* The dish wall — only drawn when the rim is near the viewport (you're at the edge). */
+function drawDishRim(t) {
+  if (Math.hypot(game.camera.x, game.camera.y) < DISH_R - camHalfDiag() - 60) return;
+  ctx.save();
+  ctx.lineWidth = 90; ctx.strokeStyle = 'rgba(2,6,9,0.55)';                 // shadow / void edge
+  ctx.beginPath(); ctx.arc(0, 0, DISH_R + 45, 0, TAU); ctx.stroke();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineWidth = 18; ctx.strokeStyle = 'rgba(47,170,210,0.10)';            // outer halo
+  ctx.beginPath(); ctx.arc(0, 0, DISH_R, 0, TAU); ctx.stroke();
+  ctx.lineWidth = 6;  ctx.strokeStyle = 'rgba(130,230,255,0.7)';            // glass wall
+  ctx.beginPath(); ctx.arc(0, 0, DISH_R, 0, TAU); ctx.stroke();
+  ctx.lineWidth = 2;  ctx.strokeStyle = 'rgba(225,255,255,0.85)';           // inner glint
+  ctx.beginPath(); ctx.arc(0, 0, DISH_R - 8, 0, TAU); ctx.stroke();
+  ctx.restore();
 }
 
 function drawPlayer(t) {
@@ -4407,30 +4447,16 @@ function drawFloaters() {
   ctx.restore();
 }
 
-/* The action plays out inside a petri dish viewed under a microscope: the round
- * glass dish frames the arena, its corners fall into shadow, and a glossy rim +
- * meniscus highlight + condensation specks sell the glass. */
+/* Soft microscope-lens vignette. The actual dish rim is now a world-space wall
+ * (drawDishRim), so this just darkens the corners + adds faint glass specks for
+ * the under-the-scope feel — no competing centred ring. */
 function drawVignette() {
-  const cx = view.w / 2, cy = view.h / 2, R = Math.min(view.w, view.h) * 0.6;
-  // 1) corners fall into shadow (you're peering into a round dish)
-  const dark = ctx.createRadialGradient(cx, cy, R * 0.82, cx, cy, Math.hypot(view.w, view.h) / 1.45);
-  dark.addColorStop(0, 'rgba(2,7,11,0)'); dark.addColorStop(0.5, 'rgba(2,7,11,0.34)'); dark.addColorStop(1, 'rgba(1,4,7,0.66)');
+  const cx = view.w / 2, cy = view.h / 2, R = Math.min(view.w, view.h) * 0.62;
+  const dark = ctx.createRadialGradient(cx, cy, R * 0.82, cx, cy, Math.hypot(view.w, view.h) / 1.4);
+  dark.addColorStop(0, 'rgba(2,7,11,0)'); dark.addColorStop(0.6, 'rgba(2,7,11,0.26)'); dark.addColorStop(1, 'rgba(1,4,7,0.58)');
   ctx.fillStyle = dark; ctx.fillRect(0, 0, view.w, view.h);
-  // 2) glossy glass rim — the dish wall
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.lineWidth = 11; ctx.strokeStyle = 'rgba(47,200,230,0.09)';            // soft outer halo
-  ctx.beginPath(); ctx.arc(cx, cy, R + 3, 0, TAU); ctx.stroke();
-  ctx.lineWidth = 3;  ctx.strokeStyle = 'rgba(120,225,255,0.5)';            // crisp wall
-  ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
-  ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(120,225,255,0.2)';           // inner wall
-  ctx.beginPath(); ctx.arc(cx, cy, R - 9, 0, TAU); ctx.stroke();
-  ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(220,255,255,0.55)';            // top-left meniscus glint
-  ctx.beginPath(); ctx.arc(cx, cy, R - 2, Math.PI * 1.04, Math.PI * 1.5); ctx.stroke();
-  ctx.restore();
-  // 3) condensation / glass specks near the rim
-  ctx.save(); ctx.fillStyle = 'rgba(205,240,255,0.10)';
-  for (let i = 0; i < 7; i++) { const a = i * 1.7, rr = R * (0.7 + 0.27 * ((i * 0.31) % 1));
+  ctx.save(); ctx.fillStyle = 'rgba(205,240,255,0.07)';
+  for (let i = 0; i < 6; i++) { const a = i * 1.7, rr = R * (0.7 + 0.26 * ((i * 0.31) % 1));
     ctx.beginPath(); ctx.arc(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, 2 + (i % 3), 0, TAU); ctx.fill(); }
   ctx.restore();
 }
@@ -4562,6 +4588,10 @@ function drawMinimap() {
   ctx.fillStyle = 'rgba(6,18,26,0.72)'; ctx.strokeStyle = 'rgba(74,226,255,0.3)'; ctx.lineWidth = 1.5;
   mmRoundRect(x0, y0, size, size, 10); ctx.fill(); ctx.stroke();
   mmRoundRect(x0, y0, size, size, 10); ctx.clip();
+  // petri-dish wall (curve appears as you near the rim)
+  { const mcx = cx + (0 - p.x) * sc, mcy = cy + (0 - p.y) * sc, mr = DISH_R * sc;
+    ctx.strokeStyle = 'rgba(130,230,255,0.5)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(mcx, mcy, mr, 0, TAU); ctx.stroke(); }
   // environment hazards
   for (const h of game.env) { const m = toMap(h.x, h.y); ctx.fillStyle = h.kind === 'vent' ? 'rgba(255,138,58,0.7)' : h.kind === 'current' ? 'rgba(95,200,255,0.6)' : 'rgba(157,255,95,0.6)'; ctx.fillRect(m[0] - 2, m[1] - 2, 4, 4); }
   // micro-boost pads — pulsing ring in rarity colour so they're worth chasing

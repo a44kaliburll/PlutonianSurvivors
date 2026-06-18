@@ -384,6 +384,21 @@
   ::-webkit-scrollbar { width: 10px; } ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: rgba(74,226,255,0.25); border-radius: 6px; }
 
+  /* ---- End-of-run unlock reveal cards ---- */
+  #go-unlocks { width: 100%; }
+  .uc-head { margin-top: 14px; text-align: center; font-size: 13px; letter-spacing: 2px; font-weight: 800;
+    color: var(--bio-green); text-shadow: 0 0 12px rgba(109,255,138,0.5); }
+  .uc-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 10px; }
+  .unlock-card { position: relative; width: 118px; padding: 12px 8px; border-radius: 12px; text-align: center;
+    background: linear-gradient(180deg, rgba(10,26,36,0.95), rgba(6,16,23,0.95));
+    border: 1px solid var(--uc, var(--panel-edge)); box-shadow: 0 0 16px rgba(47,246,255,0.22);
+    animation: pop 0.3s ease backwards; }
+  .uc-ic { font-size: 34px; line-height: 1; filter: drop-shadow(0 0 10px currentColor); }
+  .uc-name { font-size: 12px; font-weight: 800; margin-top: 5px; }
+  .uc-kind { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ink-dim); margin-top: 2px; }
+  .uc-new { position: absolute; top: 6px; right: 7px; font-size: 8px; font-weight: 800; letter-spacing: 1px;
+    color: #04121a; background: var(--uc, var(--bio-green)); border-radius: 5px; padding: 1px 4px; }
+
   /* ======================================================================
      MOBILE / TOUCH
      ====================================================================== */
@@ -585,6 +600,7 @@
       <div id="go-stats" class="stat-grid"></div>
       <div class="coinline" id="go-coins" style="margin-top:16px;"></div>
       <div id="go-quests" class="hint"></div>
+      <div id="go-unlocks"></div>
       <div class="menu-actions">
         <button class="btn primary" data-act="retry">⟳ Incubate Again</button>
         <button class="btn" data-act="to-shop">🧪 Genome Lab</button>
@@ -1357,7 +1373,9 @@ function defaultBoosts() {
  * higher (rarer/better) indices. luck 0 = base odds; ~0.6 ≈ dramatically more  *
  * top-tier rolls. Shared by boost pads, loot chests and lucky level-up cards.  */
 function luckyIndex(weights, luck) {
-  const w = weights.map((b, i) => b * (1 + (luck || 0) * i * 1.6));
+  // Higher indices (rarer tiers) get a steep luck-scaled boost so Luck is clearly
+  // felt on chest tiers, boost-pad rarity and biomatter colour.
+  const w = weights.map((b, i) => b * (1 + (luck || 0) * i * 3.0));
   let total = 0; for (const x of w) total += x;
   let roll = rand(0, total);
   for (let i = 0; i < w.length; i++) { roll -= w[i]; if (roll <= 0) return i; }
@@ -1441,6 +1459,14 @@ const ENEMIES = {
     behavior: 'mortar', standoff: 250,
     fact: 'Fungal spores are airborne reproductive cells with tough protective coats. Some trigger allergies; others, like ergot, produce powerful neuroactive toxins.',
     special: 'Anchors at 250px and lobs toxic globs. Stepping in a glob inverts your controls for 2.5s.'
+  },
+  algae: {
+    id: 'algae', name: 'Chlorella Graze', icon: '🟢', color: '#9dff5f', glow: '#6dff3a',
+    weight: 2, window: [0, 1080], freq: 0.5,
+    hp: 1, damage: 0, speed: 64, radius: 11, xp: 8, coinChance: 0.12, coin: 2,
+    behavior: 'prey',
+    fact: 'Chlorella is a tiny edible green alga, packed with protein — predatory microbes engulf and digest it whole by phagocytosis.',
+    special: 'Harmless prey: ignores your weapons, flees slowly, and hides in toxic blooms. EAT it by touch for a big biomatter snack (and sometimes a heal).'
   },
   amoeboid: {
     id: 'amoeboid', name: 'Amoeboid Pseudopod', icon: '🟣', color: '#c98bff', glow: '#b07bff',
@@ -2271,7 +2297,7 @@ function recomputeStats() {
   p.regen          += adapt('regen') * 0.6;
   p.mult.crit      += adapt('lethality') * 0.03;
   p.mult.critMult  += adapt('lethality') * 0.15;
-  p.mult.luck       = adapt('luck') * 0.12;
+  p.mult.luck       = adapt('luck') * 0.15;   // up to +75% at tier 5
   p.mult.dodge      = Math.min(0.75, adapt('dodge') * 0.06);   // Cilia Reflex
   // Run mutations (objective rewards) stack on top.
   p.mult.damageMul *= (1 + 0.20 * mut('power'));
@@ -2339,6 +2365,7 @@ function spawnFloater(x, y, text, color, crit = false) {
 /* ---- Apply damage to an enemy ------------------------------------------ */
 function damageEnemy(e, amount, opts = {}) {
   if (e.dead) return;
+  if (e.eatable) return;                  // prey shrug off weapons — they're EATEN, not shot
   if (e.invulnShield) { if (!opts.silent) spawnFloater(e.x, e.y - e.r, 'IMMUNE', '#7fa8b8'); return; }
   // Acidic "armor strip" amplifies all damage taken while debuffed.
   let amt = amount * (1 + (e.amplify || 0));
@@ -2512,6 +2539,7 @@ function spawnEnemy(typeId, x, y, opts = {}) {
   e.boss = !!def.boss && !opts.asClone; e.elite = !!def.elite && !opts.asClone;
   e.bossClone = !!opts.asClone;
   e.behavior = opts.asClone ? 'juggernaut' : def.behavior;
+  e.eatable = e.behavior === 'prey';              // prey ignore weapons; consumed by touch
   e.invulnShield = false; e.fungal = null;
   e.golden = false; e.tendrilActive = false;      // pooled-object hygiene: clear recycled flags
   e.kbImmune = e.behavior === 'juggernaut' || e.behavior === 'boss';
@@ -2609,15 +2637,15 @@ function createDirector() {
  * Each entry is the {enemyType: weight} mix spawned during that 2-min block;   *
  * the last wave repeats if the run somehow runs long (endless caps here too).  */
 const WAVES = [
-  { name: 'Lysogenic Bloom',    mix: { virus: 1.0 } },                              // 0–2:00  starter enemies only
-  { name: 'Flagellate Surge',   mix: { virus: 0.7, bacterium: 0.5 } },              // 2–4     starters + bacteria
-  { name: 'Chemotactic Swarm',  mix: { bacterium: 0.8, virus: 0.4 } },              // 4–6
-  { name: 'Spore Drift',        mix: { virus: 0.6, bacterium: 0.5, spore: 0.25 } }, // 6–8     inverters arrive — nerfed, starters mixed in
-  { name: 'Toxic Tide',         mix: { virus: 0.6, bacterium: 0.6, spore: 0.35 } }, // 8–10    was spore 0.7 -> 0.35, viruses blended in
-  { name: 'Viral Resurgence',   mix: { virus: 1.1, spore: 0.25 } },                 // 10–12
-  { name: 'Mixed Culture',      mix: { virus: 0.6, bacterium: 0.6, spore: 0.3 } },  // 12–14
-  { name: 'Fungal Mass',        mix: { virus: 0.6, spore: 0.5, bacterium: 0.5 } },  // 14–16   was spore 1.0 -> 0.5, viruses blended in
-  { name: 'Final Bloom',        mix: { virus: 0.9, bacterium: 0.7, spore: 0.4 } },  // 16–18
+  { name: 'Lysogenic Bloom',    mix: { virus: 1.0, algae: 0.3 } },                              // 0–2:00  starters + grazers to eat
+  { name: 'Flagellate Surge',   mix: { virus: 0.7, bacterium: 0.5, algae: 0.3 } },              // 2–4
+  { name: 'Chemotactic Swarm',  mix: { bacterium: 0.8, virus: 0.4, algae: 0.3 } },              // 4–6
+  { name: 'Spore Drift',        mix: { virus: 0.6, bacterium: 0.5, spore: 0.25, algae: 0.3 } }, // 6–8     inverters arrive — nerfed, starters mixed in
+  { name: 'Toxic Tide',         mix: { virus: 0.6, bacterium: 0.6, spore: 0.35, algae: 0.25 } },// 8–10
+  { name: 'Viral Resurgence',   mix: { virus: 1.1, spore: 0.25, algae: 0.25 } },                // 10–12
+  { name: 'Mixed Culture',      mix: { virus: 0.6, bacterium: 0.6, spore: 0.3, algae: 0.25 } }, // 12–14
+  { name: 'Fungal Mass',        mix: { virus: 0.6, spore: 0.5, bacterium: 0.5, algae: 0.2 } },  // 14–16
+  { name: 'Final Bloom',        mix: { virus: 0.9, bacterium: 0.7, spore: 0.4, algae: 0.2 } },  // 16–18
 ];
 function currentWave(t) { return WAVES[Math.min(Math.floor(t / 120), WAVES.length - 1)]; }
 /* Pick an enemy id from the active wave's weighted mix (or null if empty). */
@@ -2659,10 +2687,18 @@ function updateDirector(dt) {
   //     swarm STOPS at 18:30, clearing the field for the 20:00 boss. ---
   const spawnsOpen = game.mode === 'endless' || t < 1110;     // 18:30 cutoff
   dir.cap = Math.min(500, 130 + t * 0.32);
+  // Count living REGULAR (non-elite/boss) enemies. A few tanky high-weight cells
+  // (spores, the weight-40 Amoeboid) used to fill the weight budget and starve
+  // the swarm, so the field would go eerily quiet. Guarantee a minimum count so
+  // the swarm NEVER stops while spawns are open.
+  let regAlive = 0; for (let i = 0; i < game.enemies.length; i++) { const e = game.enemies[i]; if (!e.dead && !e.boss && !e.elite && !e.eatable) regAlive++; }
+  const floor = Math.min(48, 10 + t * 0.035);         // floor counts THREATS only (harmless prey don't pad it)
   dir.spawnTimer -= dt;
-  if (spawnsOpen && dir.spawnTimer <= 0 && dir.weight < dir.cap) {
+  if (spawnsOpen && dir.spawnTimer <= 0 && (dir.weight < dir.cap || regAlive < floor)) {
     const burst = 1 + Math.floor(t / 420);          // density grows more gradually
-    for (let i = 0; i < burst && dir.weight < dir.cap; i++) { const ty = weightedPickType(t); if (ty) spawnRingEnemy(ty); }
+    for (let i = 0; i < burst && game.enemies.length < 700 && (dir.weight < dir.cap || regAlive < floor); i++) {
+      const ty = weightedPickType(t); if (ty) { spawnRingEnemy(ty); if (!(ENEMIES[ty] && ENEMIES[ty].behavior === 'prey')) regAlive++; }
+    }
     dir.spawnTimer = clamp(0.6 - t * 0.00026, 0.12, 0.6);
   }
 
@@ -2696,6 +2732,36 @@ function killEnemyQuiet(e) {
   if (e.dead) return; e.dead = true;
   if (game.director) game.director.weight = Math.max(0, game.director.weight - e.def.weight);
   removeFromArray(game.enemies, e); enemyPool.release(e);
+}
+
+/* Phagocytosis: the player engulfs a prey cell on contact. A satisfying gulp,
+ * a generous biomatter drop and an occasional heal/coin — no damage taken. */
+function eatPrey(e) {
+  if (e.dead) return; e.dead = true;
+  const p = game.player, def = e.def;
+  game.kills++; game.killsByType[e.type] = (game.killsByType[e.type] || 0) + 1;
+  sfx('kill');
+  if (game.objective && game.objective.type === 'purge' && dist2(e.x, e.y, game.objective.x, game.objective.y) < game.objective.r * game.objective.r) game.objective.count++;
+  // gulp visuals: a quick implosion of the prey's glow into the player
+  spawnParticles(e.x, e.y, def.glow, 14, { speed: 130, life: 0.45, size: 3 });
+  spawnRing(e.x, e.y, def.glow, e.r * 2.2, 0.32);
+  spawnFloater(p.x, p.y - p.r - 8, 'GULP', def.glow);
+  dropXP(e.x, e.y, def.xp);                                  // a big biomatter snack
+  if (chance(def.coinChance)) spawnPickup('coin', e.x, e.y, def.coin);
+  if (chance(0.18)) spawnPickup('heal', e.x, e.y, 18);        // tasty + nourishing
+  if (game.director) game.director.weight = Math.max(0, game.director.weight - def.weight);
+  removeFromArray(game.enemies, e); enemyPool.release(e);
+}
+
+/* Nearest active "toxic" hazard (env pool/vent or a damaging puddle) — prey flee
+ * toward these to cower inside, daring the player to brave the bloom to eat them. */
+function nearestToxicHazard(x, y, maxDist) {
+  let best = null, bd = maxDist * maxDist;
+  for (let i = 0; i < game.env.length; i++) { const h = game.env[i]; if (h.kind !== 'pool' && h.kind !== 'vent') continue;
+    const d = dist2(x, y, h.x, h.y); if (d < bd) { bd = d; best = h; } }
+  for (let i = 0; i < game.hazards.length; i++) { const h = game.hazards[i]; if (h.kind !== 'acid' && h.kind !== 'residue' && h.kind !== 'cloud' && h.kind !== 'invert' && h.kind !== 'slime') continue;
+    const d = dist2(x, y, h.x, h.y); if (d < bd) { bd = d; best = h; } }
+  return best;
 }
 
 function onBossDefeated(e) {
@@ -3312,6 +3378,24 @@ function updateEnemies(dt) {
           vy = Math.sin(away) * e.speed + Math.sin(e.phase) * e.speed * 0.4;
           break;
         }
+        case 'prey': {                                   // harmless grazer — flees slowly, hides in toxic blooms
+          e.phase += dt * 1.6;
+          if (dToP < 340) {                              // player near -> flee, preferring a toxic bloom to cower in
+            const bloom = nearestToxicHazard(e.x, e.y, 420);
+            let ax, ay;
+            if (bloom && dist(e.x, e.y, bloom.x, bloom.y) > bloom.r * 0.55) {
+              const toB = angTo(e.x, e.y, bloom.x, bloom.y); ax = Math.cos(toB); ay = Math.sin(toB);
+            } else {
+              const away = a2p + Math.PI; ax = Math.cos(away); ay = Math.sin(away);
+            }
+            vx = (ax + Math.cos(e.phase) * 0.35) * e.speed * 1.25;   // skittish, but base speed is low
+            vy = (ay + Math.sin(e.phase) * 0.35) * e.speed * 1.25;
+          } else {                                       // graze: gentle aimless drift
+            vx = Math.cos(e.phase) * e.speed * 0.5;
+            vy = Math.sin(e.phase * 0.7) * e.speed * 0.5;
+          }
+          break;
+        }
         case 'boss': { updateBoss(e, p, dt); vx = e._vx || 0; vy = e._vy || 0; break; }
       }
       e.x += vx * speedMul * dt; e.y += vy * speedMul * dt;
@@ -3328,12 +3412,15 @@ function updateEnemies(dt) {
       e.x += sx * 22 * dt; e.y += sy * 22 * dt;
     }
 
-    // ---- contact damage to the player ----
+    // ---- contact: eat prey, or take contact damage ----
     const rr = e.r + p.r;
-    if (e.contactCd <= 0 && dist2(e.x, e.y, p.x, p.y) < rr * rr) {
-      damagePlayer(e.damage, e.x, e.y);
-      e.contactCd = 0.55;
-      if (!e.kbImmune) { e.kx -= Math.cos(a2pSafe(e, p)) * 120; e.ky -= Math.sin(a2pSafe(e, p)) * 120; }
+    if (dist2(e.x, e.y, p.x, p.y) < rr * rr) {
+      if (e.eatable) { eatPrey(e); continue; }       // consumed on touch — no damage to the player
+      if (e.contactCd <= 0) {
+        damagePlayer(e.damage, e.x, e.y);
+        e.contactCd = 0.55;
+        if (!e.kbImmune) { e.kx -= Math.cos(a2pSafe(e, p)) * 120; e.ky -= Math.sin(a2pSafe(e, p)) * 120; }
+      }
     }
   }
 }
@@ -4140,11 +4227,32 @@ function tintFor(e) {
   if (e.amplify > 0) return '#9dff5f';
   return null;
 }
+/* Eatable prey (Chlorella) — a soft green grazer, visually unlike any threat,
+ * with an "eat me" dashed ring when the player closes in. */
+function drawPrey(e, t) {
+  const wob = 1 + 0.13 * Math.sin(t * 4 + e.phase);
+  ctx.save(); ctx.translate(e.x, e.y);
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(0, 0, 1, 0, 0, e.r * 2.1);
+  g.addColorStop(0, 'rgba(157,255,95,0.45)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, e.r * 2.1, 0, TAU); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = 'rgba(120,230,90,0.95)';
+  ctx.beginPath(); ctx.ellipse(0, 0, e.r * wob, e.r / wob, e.angle, 0, TAU); ctx.fill();
+  ctx.strokeStyle = 'rgba(205,255,150,0.85)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.fillStyle = 'rgba(40,120,30,0.85)';
+  for (let k = 0; k < 3; k++) { const a = e.phase + k * 2.1; ctx.beginPath(); ctx.arc(Math.cos(a) * e.r * 0.42, Math.sin(a) * e.r * 0.42, e.r * 0.2, 0, TAU); ctx.fill(); }
+  ctx.restore();
+  const dp = dist(e.x, e.y, game.player.x, game.player.y);
+  if (dp < 210) { ctx.save(); ctx.globalAlpha = clamp((210 - dp) / 210, 0, 1) * 0.6; ctx.strokeStyle = '#9dff5f';
+    ctx.setLineDash([4, 5]); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 7 + 2 * Math.sin(t * 6), 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.restore(); }
+}
 function drawEnemies(t) {
   const es = game.enemies;
   for (let i = 0; i < es.length; i++) {
     const e = es[i]; if (e.dead) continue;
     if (!onScreen(e.x, e.y, e.r + 30)) continue;
+    if (e.eatable) { drawPrey(e, t); continue; }
     const spr = SPR[e.type] || SPR.virus;
     const scale = (e.r * 2) / spr.width * (e.boss ? 1 : 1.15);
     ctx.save(); ctx.translate(e.x, e.y);
@@ -4224,6 +4332,19 @@ function drawPickups(t) {
   }
 }
 
+/* Organic blob outline (sine-perturbed circle) — the basis for the toxic blooms
+ * & mold that floor hazards now grow into, instead of plain circles. */
+function bloomPath(cx, cy, r, phase, lobeAmp, lobes) {
+  const N = 24;
+  ctx.beginPath();
+  for (let i = 0; i <= N; i++) {
+    const a = (i / N) * TAU;
+    const rr = r * (1 + lobeAmp * Math.sin(a * lobes + phase) + 0.06 * Math.sin(a * (lobes * 2 + 1) - phase * 1.6));
+    const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+}
 function drawHazards(t) {
   const arr = game.hazards;
   for (let i = 0; i < arr.length; i++) {
@@ -4234,13 +4355,16 @@ function drawHazards(t) {
       ctx.save(); ctx.shadowColor = '#ffd166'; ctx.shadowBlur = h.armed ? 14 : 6;
       ctx.fillStyle = h.armed ? '#ffe08a' : '#9a7a3a'; ctx.beginPath(); ctx.arc(h.x, h.y, r, 0, TAU); ctx.fill(); ctx.restore();
     } else {
+      // toxic bloom: blobby, mottled, growing into place — reads "organic & dangerous"
+      const grow = clamp((game.time - (h.born || 0)) / 1.6, 0.35, 1);
+      const r = h.r * grow, ph = t * 0.8 + i;
+      const rim = h.color.replace(/[\d.]+\)$/, '0.6)');
       ctx.save();
-      const grad = ctx.createRadialGradient(h.x, h.y, 1, h.x, h.y, h.r);
-      grad.addColorStop(0, h.color); grad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.globalAlpha = 0.4 + 0.5 * fade; ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, TAU); ctx.fill();
-      // animated rim
-      ctx.globalAlpha = 0.5 * fade; ctx.strokeStyle = h.color.replace(/[\d.]+\)$/,'0.6)'); ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(h.x, h.y, h.r * (0.85 + 0.1 * Math.sin(t * 4 + i)), 0, TAU); ctx.stroke();
+      const grad = ctx.createRadialGradient(h.x, h.y, 1, h.x, h.y, r);
+      grad.addColorStop(0, h.color); grad.addColorStop(0.7, h.color.replace(/[\d.]+\)$/, '0.10)')); grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = 0.45 + 0.5 * fade; ctx.fillStyle = grad; bloomPath(h.x, h.y, r, ph, 0.16, 5); ctx.fill();
+      ctx.globalAlpha = 0.35 * fade; ctx.fillStyle = rim; bloomPath(h.x, h.y, r * 0.55, -ph * 1.4, 0.22, 6); ctx.fill();   // mottled core
+      ctx.globalAlpha = 0.55 * fade; ctx.strokeStyle = rim; ctx.lineWidth = 2; bloomPath(h.x, h.y, r * 0.95, ph, 0.16, 5); ctx.stroke();
       ctx.restore();
     }
   }
@@ -4283,10 +4407,32 @@ function drawFloaters() {
   ctx.restore();
 }
 
+/* The action plays out inside a petri dish viewed under a microscope: the round
+ * glass dish frames the arena, its corners fall into shadow, and a glossy rim +
+ * meniscus highlight + condensation specks sell the glass. */
 function drawVignette() {
-  const g = ctx.createRadialGradient(view.w / 2, view.h / 2, Math.min(view.w, view.h) * 0.4, view.w / 2, view.h / 2, Math.hypot(view.w, view.h) / 1.5);
-  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.55)');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, view.w, view.h);
+  const cx = view.w / 2, cy = view.h / 2, R = Math.min(view.w, view.h) * 0.6;
+  // 1) corners fall into shadow (you're peering into a round dish)
+  const dark = ctx.createRadialGradient(cx, cy, R * 0.82, cx, cy, Math.hypot(view.w, view.h) / 1.45);
+  dark.addColorStop(0, 'rgba(2,7,11,0)'); dark.addColorStop(0.5, 'rgba(2,7,11,0.34)'); dark.addColorStop(1, 'rgba(1,4,7,0.66)');
+  ctx.fillStyle = dark; ctx.fillRect(0, 0, view.w, view.h);
+  // 2) glossy glass rim — the dish wall
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineWidth = 11; ctx.strokeStyle = 'rgba(47,200,230,0.09)';            // soft outer halo
+  ctx.beginPath(); ctx.arc(cx, cy, R + 3, 0, TAU); ctx.stroke();
+  ctx.lineWidth = 3;  ctx.strokeStyle = 'rgba(120,225,255,0.5)';            // crisp wall
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(120,225,255,0.2)';           // inner wall
+  ctx.beginPath(); ctx.arc(cx, cy, R - 9, 0, TAU); ctx.stroke();
+  ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(220,255,255,0.55)';            // top-left meniscus glint
+  ctx.beginPath(); ctx.arc(cx, cy, R - 2, Math.PI * 1.04, Math.PI * 1.5); ctx.stroke();
+  ctx.restore();
+  // 3) condensation / glass specks near the rim
+  ctx.save(); ctx.fillStyle = 'rgba(205,240,255,0.10)';
+  for (let i = 0; i < 7; i++) { const a = i * 1.7, rr = R * (0.7 + 0.27 * ((i * 0.31) % 1));
+    ctx.beginPath(); ctx.arc(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, 2 + (i % 3), 0, TAU); ctx.fill(); }
+  ctx.restore();
 }
 
 function drawBossBar() {
@@ -4304,33 +4450,44 @@ function drawBossBar() {
 /* ---- Environmental hazards (drawn under entities) ---------------------- */
 function drawEnvironment(t) {
   for (const h of game.env) {
-    if (!onScreen(h.x, h.y, h.r + 40)) continue;
+    if (!onScreen(h.x, h.y, h.r + 60)) continue;
+    const grow = clamp((game.time - (h.born || 0)) / 2.6, 0.3, 1);   // blooms slowly grow in
+    const ph = (h.phase || 0) + t * 0.6;
     ctx.save();
     if (h.kind === 'pool') {
-      const g = ctx.createRadialGradient(h.x, h.y, h.r * 0.2, h.x, h.y, h.r);
-      g.addColorStop(0, 'rgba(157,255,95,0.20)'); g.addColorStop(0.7, 'rgba(120,220,70,0.12)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, TAU); ctx.fill();
-      ctx.globalAlpha = 0.4; ctx.strokeStyle = 'rgba(180,255,120,0.5)'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(h.x, h.y, h.r * (0.9 + 0.05 * Math.sin(t * 3)), 0, TAU); ctx.stroke();
+      // TOXIC MOLD BLOOM — sickly green/amber organic colony with a mottled core
+      const r = h.r * grow;
+      const g = ctx.createRadialGradient(h.x, h.y, r * 0.15, h.x, h.y, r);
+      g.addColorStop(0, 'rgba(190,255,90,0.26)'); g.addColorStop(0.55, 'rgba(120,200,50,0.18)'); g.addColorStop(1, 'rgba(40,90,20,0.04)');
+      ctx.fillStyle = g; bloomPath(h.x, h.y, r, ph, 0.17, 5); ctx.fill();
+      ctx.globalAlpha = 0.5; ctx.fillStyle = 'rgba(70,120,30,0.5)'; bloomPath(h.x, h.y, r * 0.6, -ph * 1.3, 0.22, 6); ctx.fill();
+      ctx.globalAlpha = 1; ctx.strokeStyle = 'rgba(195,255,120,0.55)'; ctx.lineWidth = 2; bloomPath(h.x, h.y, r * 0.96, ph, 0.17, 5); ctx.stroke();
+      ctx.fillStyle = 'rgba(60,110,25,0.75)';                          // mold colony specks
+      for (let k = 0; k < 9; k++) { const a = k * 2.39963 + ph * 0.2, rr = r * (0.22 + 0.62 * ((k * 0.137) % 1));
+        ctx.beginPath(); ctx.arc(h.x + Math.cos(a) * rr, h.y + Math.sin(a) * rr, r * 0.055 * (1 + (k % 3) * 0.5), 0, TAU); ctx.fill(); }
     } else if (h.kind === 'vent') {
-      const k = clamp(h.phase / h.cycle, 0, 1);                       // eruption charge 0..1
-      const g = ctx.createRadialGradient(h.x, h.y, 1, h.x, h.y, h.r);
-      g.addColorStop(0, `rgba(255,${Math.floor(120 + 120 * k)},60,${0.18 + 0.25 * k})`); g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, TAU); ctx.fill();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.strokeStyle = `rgba(255,150,60,${0.3 + 0.5 * k})`; ctx.lineWidth = 2 + 4 * k;
-      ctx.beginPath(); ctx.arc(h.x, h.y, h.r * (0.4 + 0.6 * k), 0, TAU); ctx.stroke();
+      // BUBBLING SPORE VENT — amber colony that swells, then erupts
+      const k = clamp(h.phase / h.cycle, 0, 1), r = h.r * (0.7 + 0.3 * k);
+      const g = ctx.createRadialGradient(h.x, h.y, 1, h.x, h.y, r);
+      g.addColorStop(0, `rgba(255,${Math.floor(150 + 90 * k)},70,${0.2 + 0.28 * k})`); g.addColorStop(0.7, 'rgba(200,110,40,0.14)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; bloomPath(h.x, h.y, r, ph, 0.12, 4); ctx.fill();
+      ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(255,180,90,${0.4 + 0.4 * k})`;
+      for (let b = 0; b < 6; b++) { const bp = (t * 0.8 + b * 0.9) % 1;
+        ctx.beginPath(); ctx.arc(h.x + Math.cos(b * 2.1) * r * 0.4, h.y + Math.sin(b * 2.1) * r * 0.4 - bp * r * 0.5, (1 - bp) * r * 0.12 + 2, 0, TAU); ctx.fill(); }
+      ctx.strokeStyle = `rgba(255,170,70,${0.4 + 0.5 * k})`; ctx.lineWidth = 2 + 4 * k; bloomPath(h.x, h.y, r * (0.5 + 0.5 * k), ph, 0.12, 4); ctx.stroke();
     } else if (h.kind === 'current') {
-      const g = ctx.createRadialGradient(h.x, h.y, h.r * 0.2, h.x, h.y, h.r);
-      g.addColorStop(0, 'rgba(95,200,255,0.16)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, TAU); ctx.fill();
-      ctx.globalAlpha = 0.5; ctx.strokeStyle = 'rgba(170,225,255,0.7)'; ctx.lineWidth = 2;
-      const fx = Math.cos(h.flow), fy = Math.sin(h.flow);
-      for (let i = 0; i < 3; i++) {
-        const off = ((t * 60 + i * 40) % 120) - 60, cx = h.x + fx * off, cy = h.y + fy * off;
-        ctx.beginPath(); ctx.moveTo(cx - fx * 10 - fy * 6, cy - fy * 10 + fx * 6);
-        ctx.lineTo(cx + fx * 10, cy + fy * 10); ctx.lineTo(cx - fx * 10 + fy * 6, cy - fy * 10 - fx * 6); ctx.stroke();
-      }
+      // FLOWING MUCUS — biological filaments drifting along the flow (no arrows)
+      const r = h.r * grow, fx = Math.cos(h.flow), fy = Math.sin(h.flow), px = -fy, py = fx;
+      const g = ctx.createRadialGradient(h.x, h.y, r * 0.15, h.x, h.y, r);
+      g.addColorStop(0, 'rgba(120,210,255,0.14)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(h.x, h.y, r, 0, TAU); ctx.fill();
+      ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(170,225,255,0.55)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+      for (let s = -2; s <= 2; s++) { const lat = s * r * 0.32, a0 = -r + ((t * 80 + s * 37) % (r * 2)), len = r * 0.5;
+        ctx.beginPath(); ctx.moveTo(h.x + fx * (a0 - len) + px * lat, h.y + fy * (a0 - len) + py * lat);
+        ctx.lineTo(h.x + fx * a0 + px * lat, h.y + fy * a0 + py * lat); ctx.stroke(); }
+      ctx.fillStyle = 'rgba(205,240,255,0.6)';
+      for (let m = 0; m < 6; m++) { const a0 = -r + ((t * 100 + m * 55) % (r * 2)), lat = ((m % 5) - 2) * r * 0.3;
+        ctx.beginPath(); ctx.arc(h.x + fx * a0 + px * lat, h.y + fy * a0 + py * lat, 2, 0, TAU); ctx.fill(); }
     }
     ctx.restore();
   }
@@ -5024,9 +5181,27 @@ function endRun(win) {
   $('go-coins').textContent = '🪙 +' + game.coinsThisRun.toLocaleString() + ' Genetic Code  ·  Bank: ' + SAVE.coins.toLocaleString();
   const lines = [];
   if (game.questsCompletedThisRun.length) lines.push('✔ Quests: ' + game.questsCompletedThisRun.map(q => q.name).join(', '));
-  if (game._newlyUnlocked && game._newlyUnlocked.length) lines.push('🧬 Unlocked: ' + game._newlyUnlocked.map(c => c.icon + ' ' + c.name + ' (' + c.kind + ')').join(', '));
   $('go-quests').innerHTML = lines.join('<br/>');
+  renderUnlockCards(game._newlyUnlocked);
   setHud(false); showOverlay('gameover-modal');
+}
+/* Card-based reveal of everything newly unlocked this run (cell lines, weapons,
+ * organelles) — shown on the end screen so achievements feel earned. */
+function renderUnlockCards(list) {
+  const el = $('go-unlocks'); if (!el) return;
+  if (!list || !list.length) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  const tierOf = u => u.kind === 'weapon' ? weaponTier(u.id) : u.kind === 'organelle' ? passiveTier(u.id) : null;
+  const cards = list.map((u, i) => {
+    const col = u.kind === 'weapon' ? (WEAPON_BY_ID[u.id] && WEAPON_BY_ID[u.id].color) : u.kind === 'organelle' ? (PASSIVE_BY_ID[u.id] && PASSIVE_BY_ID[u.id].color) : (CHAR_BY_ID[u.id] && CHAR_BY_ID[u.id].color);
+    const c = col || '#6dff8a', tier = tierOf(u);
+    return `<div class="unlock-card" style="--uc:${c}; animation-delay:${i * 0.09}s">
+      <div class="uc-new">NEW</div>
+      <div class="uc-ic" style="color:${c}">${u.icon}</div>
+      <div class="uc-name">${u.name}${tier ? ' ' + tierBadge(tier) : ''}</div>
+      <div class="uc-kind">${u.kind}</div></div>`;
+  }).join('');
+  el.innerHTML = `<div class="uc-head">🧬 NEW UNLOCKS — ${list.length}</div><div class="uc-row">${cards}</div>`;
 }
 function quitRun() { finalizeRun(); game.state = 'menu'; setHud(false); backToMenu(); }
 function fmtTime(s) { const m = Math.floor(s / 60), ss = Math.floor(s % 60); return m + ':' + String(ss).padStart(2, '0'); }

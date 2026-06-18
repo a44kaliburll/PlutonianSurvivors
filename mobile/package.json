@@ -1,8 +1,8 @@
 {
-  "name": "bioevolution-mobile",
-  "productName": "BIOEVOLUTION",
+  "name": "mutagenic-survivors-mobile",
+  "productName": "Mutagenic Survivors",
   "version": "1.0.0",
-  "description": "Capacitor Android wrapper for BIOEVOLUTION (the single-file Canvas game lives in ../index.html and is staged into www/ at build time).",
+  "description": "Capacitor Android wrapper for Mutagenic Survivors (the single-file Canvas game lives in ../index.html and is staged into www/ at build time).",
   "private": true,
   "license": "MIT",
   "scripts": {

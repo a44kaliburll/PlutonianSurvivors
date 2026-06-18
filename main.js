@@ -1,5 +1,5 @@
 /* ============================================================================
-   BIOEVOLUTION — Electron main process
+   Mutagenic Survivors — Electron main process
    ----------------------------------------------------------------------------
    Thin desktop shell around the single-file game (index.html). The renderer is
    the game itself; we keep Node out of it (contextIsolation on, nodeIntegration
@@ -20,7 +20,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#03070a',          // matches the petri-dish void; no white flash on load
-    title: 'BIOEVOLUTION',
+    title: 'Mutagenic Survivors',
     show: false,
     autoHideMenuBar: true,               // hide the menu bar (toggle with Alt)
     icon: path.join(__dirname, 'build', 'icon.png'),

@@ -62,13 +62,13 @@ jobs:
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Stage the APK with a friendly name
-        run: cp mobile/android/app/build/outputs/apk/debug/app-debug.apk BIOEVOLUTION-1.0.0.apk
+        run: cp mobile/android/app/build/outputs/apk/debug/app-debug.apk MutagenicSurvivors-1.0.0.apk
 
       - name: Upload .apk artifact (per-run, ephemeral)
         uses: actions/upload-artifact@v4
         with:
-          name: BIOEVOLUTION-android
-          path: BIOEVOLUTION-1.0.0.apk
+          name: MutagenicSurvivors-android
+          path: MutagenicSurvivors-1.0.0.apk
           if-no-files-found: error
 
       # Attach the .apk to the same v1.0.0 Release the desktop workflow maintains.
@@ -78,5 +78,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.0
-          files: BIOEVOLUTION-1.0.0.apk
+          files: MutagenicSurvivors-1.0.0.apk
           fail_on_unmatched_files: true

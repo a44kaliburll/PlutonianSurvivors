@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>BIOEVOLUTION — A Microbial Survivors Roguelite</title>
+<title>Mutagenic Survivors — A Microbial Roguelite</title>
 <style>
   /* ============================================================================
-     BIOEVOLUTION — Stylesheet
+     Mutagenic Survivors — Stylesheet
      A bioluminescent, microscope-slide aesthetic. Neon organelle glow on a
      deep petri-dish void. Glassmorphism panels for menus & evolution modals.
      ============================================================================ */
@@ -479,7 +479,7 @@
 
   <!-- ===== Main menu ===== -->
   <div class="overlay show" id="menu-main">
-    <div class="title">BIOEVOLUTION</div>
+    <div class="title">MUTAGENIC SURVIVORS</div>
     <div class="subtitle">Survive the Microbial Apocalypse · Evolve · Mutate</div>
     <div class="menu-actions">
       <button class="btn primary" id="btn-continue" data-act="continue" style="display:none">▶ CONTINUE RUN</button>
@@ -543,7 +543,7 @@
     <div class="panel">
       <div class="modal-head">
         <h2 style="background:linear-gradient(90deg,var(--bio-green),var(--bio-cyan));-webkit-background-clip:text;background-clip:text;color:transparent;">🧬 MUTATION TRIGGERED</h2>
-        <p>Objective complete — splice a permanent mutation into your genome. They stack toward the ultimate bioevolution.</p>
+        <p>Objective complete — splice a permanent mutation into your genome. They stack toward the ultimate evolution.</p>
       </div>
       <div class="cards" id="mutation-cards"></div>
     </div>
@@ -608,7 +608,7 @@
   <div class="overlay" id="codex-modal">
     <div class="panel">
       <div class="modal-head"><h2>📖 BIO-CODEX</h2>
-        <p>Every entity in BIOEVOLUTION is rooted in real cell &amp; microbiology. Learn the science behind the swarm.</p></div>
+        <p>Every entity in Mutagenic Survivors is rooted in real cell &amp; microbiology. Learn the science behind the swarm.</p></div>
       <div class="codex-tabs" id="codex-tabs"></div>
       <div class="codex-list" id="codex-list"></div>
       <div class="row" style="margin-top:18px;"><button class="btn" data-act="back-main">← Back to Menu</button></div>
@@ -640,7 +640,7 @@
       </div>
       <div class="save-box">
         <label>Import a save code — paste &amp; load</label>
-        <textarea id="save-import" spellcheck="false" placeholder="Paste a BIOEVO… code here to restore progress"></textarea>
+        <textarea id="save-import" spellcheck="false" placeholder="Paste a save code here to restore progress"></textarea>
         <div class="row" style="justify-content:flex-start; gap:8px; margin-top:8px;">
           <button class="btn small" id="save-load">⤵ Load code</button>
           <button class="btn small ghost" id="save-reset" style="color:var(--bio-red); border-color:rgba(255,90,90,0.4)">🗑 Erase all data</button>
@@ -676,7 +676,7 @@
 <script>
 "use strict";
 /* ============================================================================
-   BIOEVOLUTION  —  single-file microbial survivors roguelite
+   Mutagenic Survivors  —  single-file microbial survivors roguelite
    ----------------------------------------------------------------------------
    Architecture overview (decoupled, data-oriented, ECS-flavoured):
 
@@ -1495,7 +1495,7 @@ const QUESTS = [
  * ======================================================================== */
 const CONCEPTS = [
   { name: 'Entity Component System', icon: '🧩', meta: 'Software architecture',
-    fact: 'BIOEVOLUTION separates DATA (components) from LOGIC (systems). The same pattern lets real games update tens of thousands of objects cache-efficiently.' },
+    fact: 'Mutagenic Survivors separates DATA (components) from LOGIC (systems). The same pattern lets real games update tens of thousands of objects cache-efficiently.' },
   { name: 'Quadtree Partitioning', icon: '🌳', meta: 'Spatial data structure',
     fact: 'To avoid checking every microbe against every other (O(N²)), space is recursively split into quadrants so each cell only tests nearby neighbours.' },
   { name: 'Boids Flocking', icon: '🐦', meta: 'Emergent behavior',
@@ -1522,7 +1522,8 @@ const BIO_TIPS = [
 /* ======================================================================== *
  *  SECTION 8 — PERSISTENCE (META SAVE)                                       *
  * ======================================================================== */
-const SAVE_KEY = 'bioevolution_save_v1';
+const SAVE_KEY = 'mutagenic_survivors_save_v1';
+const OLD_SAVE_KEY = 'bioevolution_save_v1';   // migrate progress from the pre-rename key
 const DEFAULT_SAVE = () => ({
   coins: 0,
   upgrades: { UPG_HP: 0, UPG_ARM: 0, UPG_SPD: 0, UPG_ECO: 0, UPG_RER: 0 },
@@ -1542,7 +1543,8 @@ let SAVE = DEFAULT_SAVE();
 
 function loadSave() {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    let raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) { raw = localStorage.getItem(OLD_SAVE_KEY); if (raw) localStorage.setItem(SAVE_KEY, raw); }  // one-time migration
     if (raw) {
       const parsed = JSON.parse(raw);
       SAVE = Object.assign(DEFAULT_SAVE(), parsed);
@@ -1562,13 +1564,14 @@ function markCodex(id) { if (!SAVE.codex[id]) { SAVE.codex[id] = true; commitSav
 /* Portable save codes — base64 of the whole SAVE object (meta + suspended run) *
  * so players can back progress up or carry it to another browser / device.    */
 function encodeSave(obj) {
-  try { return 'BIOEVO1.' + btoa(unescape(encodeURIComponent(JSON.stringify(obj)))); }
+  try { return 'MUTAGEN1.' + btoa(unescape(encodeURIComponent(JSON.stringify(obj)))); }
   catch (e) { return ''; }
 }
 function decodeSave(str) {
   str = String(str).trim();
   const dot = str.indexOf('.');
-  const body = (str.slice(0, 6) === 'BIOEVO' && dot >= 0) ? str.slice(dot + 1) : str;
+  // strip any short prefix (MUTAGEN1. — or the legacy BIOEVO1.); base64 never contains a dot
+  const body = (dot >= 0 && dot <= 12) ? str.slice(dot + 1) : str;
   return JSON.parse(decodeURIComponent(escape(atob(body))));
 }
 

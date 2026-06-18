@@ -1,4 +1,4 @@
-# BIOEVOLUTION — Android (Capacitor)
+# Mutagenic Survivors — Android (Capacitor)
 
 The whole game is the single self-contained `../index.html`. This folder is a thin
 [Capacitor](https://capacitorjs.com) shell that loads it in an Android WebView and
@@ -9,7 +9,7 @@ generated `android/` project are build artifacts (git-ignored), regenerated from
 ## Automated build (CI)
 
 `.github/workflows/build-android.yml` builds the APK on every push and attaches
-`BIOEVOLUTION-1.0.0.apk` to the **v1.0.0** GitHub Release (next to the desktop
+`MutagenicSurvivors-1.0.0.apk` to the **v1.0.0** GitHub Release (next to the desktop
 builds). You can also trigger it manually from the Actions tab, or download it
 from a run's Artifacts.
 
@@ -30,5 +30,5 @@ npm run apk       # ./gradlew assembleDebug
 Whenever `../index.html` changes, re-run `npm run stage && npm run sync` before
 rebuilding so the WebView picks up the new game.
 
-App id: `com.plutoniansurvivors.bioevolution` · output is a debug-signed APK
+App id: `com.mutagenicsurvivors.game` · output is a debug-signed APK
 (installable by sideload; enable "Install unknown apps" on the device).

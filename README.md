@@ -1,4 +1,4 @@
-# 🧬 BIOEVOLUTION
+# 🧬 Mutagenic Survivors
 
 An educational **microbial survivors roguelite**. Pilot a single cell through a rising tide of viruses, bacteria, toxic spores and a macrophage boss — survive, level up, evolve your organelles, and trigger screen-clearing **Apex Mutations**. Every weapon, organelle and enemy is rooted in real cell biology, with the science explained in an in-game codex.
 
@@ -10,8 +10,8 @@ The entire game is **one self-contained `index.html`** (Canvas2D, zero dependenc
 
 - **Browser:** open **`index.html`** in any modern browser (double-click or drag into a tab). That's the whole game.
 - **Windows / Android:** grab the latest build from the **[v1.0.0 Release](../../releases/tag/v1.0.0)**:
-  - `BIOEVOLUTION-Setup-1.0.0.exe` — Windows installer · `BIOEVOLUTION-Portable-1.0.0.exe` — portable, no install
-  - `BIOEVOLUTION-1.0.0.apk` — Android (sideload; enable "Install unknown apps")
+  - `MutagenicSurvivors-Setup-1.0.0.exe` — Windows installer · `MutagenicSurvivors-Portable-1.0.0.exe` — portable, no install
+  - `MutagenicSurvivors-1.0.0.apk` — Android (sideload; enable "Install unknown apps")
 
 Progress saves locally. Use **💾 Save · Backup & Transfer** in the menu to move a save code between devices.
 

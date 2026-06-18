@@ -1,8 +1,8 @@
 {
-  "name": "bioevolution",
-  "productName": "BIOEVOLUTION",
+  "name": "mutagenic-survivors",
+  "productName": "Mutagenic Survivors",
   "version": "1.0.0",
-  "description": "BIOEVOLUTION — an educational microbial survivors roguelite in a single self-contained index.html (Canvas2D). Achievement-gated armory, Apex mutations, a 12-track procedural soundtrack, and desktop (.exe) + Android (.apk) builds.",
+  "description": "Mutagenic Survivors — an educational microbial survivors roguelite in a single self-contained index.html (Canvas2D). Achievement-gated armory, Apex mutations, a 12-track procedural soundtrack, and desktop (.exe) + Android (.apk) builds.",
   "main": "main.js",
   "author": "PlutonianSurvivors",
   "license": "MIT",
@@ -20,8 +20,8 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "com.plutoniansurvivors.bioevolution",
-    "productName": "BIOEVOLUTION",
+    "appId": "com.mutagenicsurvivors.game",
+    "productName": "Mutagenic Survivors",
     "directories": { "output": "dist" },
     "files": [
       "index.html",
@@ -34,7 +34,7 @@
         { "target": "portable", "arch": ["x64"] }
       ],
       "icon": "build/icon.png",
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "MutagenicSurvivors-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -42,10 +42,10 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "BIOEVOLUTION"
+      "shortcutName": "Mutagenic Survivors"
     },
     "portable": {
-      "artifactName": "${productName}-Portable-${version}.exe"
+      "artifactName": "MutagenicSurvivors-Portable-${version}.exe"
     },
     "linux": {
       "target": ["AppImage"],

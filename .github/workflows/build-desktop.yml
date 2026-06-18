@@ -34,7 +34,7 @@ jobs:
       - name: Upload .exe artifacts (per-run, ephemeral)
         uses: actions/upload-artifact@v4
         with:
-          name: BIOEVOLUTION-windows
+          name: MutagenicSurvivors-windows
           path: |
             dist/*.exe
           if-no-files-found: error
@@ -47,11 +47,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.0
-          name: BIOEVOLUTION — Desktop (v1.0.0)
+          name: Mutagenic Survivors — Desktop (v1.0.0)
           body: |
-            Windows build of BIOEVOLUTION, rebuilt automatically from the latest commit.
+            Windows build of Mutagenic Survivors, rebuilt automatically from the latest commit.
 
-            - **BIOEVOLUTION-Setup-1.0.0.exe** — installer (Start-menu + desktop shortcut)
-            - **BIOEVOLUTION-Portable-1.0.0.exe** — single-file portable, no install
+            - **MutagenicSurvivors-Setup-1.0.0.exe** — installer (Start-menu + desktop shortcut)
+            - **MutagenicSurvivors-Portable-1.0.0.exe** — single-file portable, no install
           files: dist/*.exe
           fail_on_unmatched_files: true
